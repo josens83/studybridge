@@ -1,0 +1,12 @@
+# Supabase Configuration
+# This file is used for local development with Supabase CLI
+
+[auth]
+# Enable anonymous sign-ins
+enable_anonymous_sign_ins = true
+site_url = "http://localhost:3000"
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
