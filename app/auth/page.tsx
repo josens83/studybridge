@@ -3,33 +3,40 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { BookOpen, Mail, Lock, User } from 'lucide-react';
+import { BookOpen, Mail, Lock, User, AlertCircle } from 'lucide-react';
+import { signUp, signIn, signInAnonymously } from '@/lib/supabase/auth';
+import { useAuthStore } from '@/lib/store/auth';
 
 type AuthMode = 'login' | 'signup';
 
 export default function AuthPage() {
   const router = useRouter();
+  const { setUser } = useAuthStore();
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nickname, setNickname] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError(null);
 
     try {
-      // TODO: Implement actual authentication with Supabase
-      console.log({ mode, email, password, nickname });
-
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Redirect to dashboard
-      router.push('/dashboard');
-    } catch (error) {
+      if (mode === 'signup') {
+        const { profile } = await signUp({ email, password, nickname });
+        setUser(profile);
+        router.push('/dashboard');
+      } else {
+        const { profile } = await signIn({ email, password });
+        setUser(profile);
+        router.push('/dashboard');
+      }
+    } catch (error: any) {
       console.error('Auth error:', error);
+      setError(error.message || '인증 중 오류가 발생했습니다.');
     } finally {
       setIsLoading(false);
     }
@@ -37,18 +44,15 @@ export default function AuthPage() {
 
   const handleAnonymousLogin = async () => {
     setIsLoading(true);
+    setError(null);
 
     try {
-      // TODO: Implement anonymous login with Supabase
-      console.log('Anonymous login');
-
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Redirect to home
+      const { profile } = await signInAnonymously();
+      setUser(profile);
       router.push('/');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Anonymous login error:', error);
+      setError(error.message || '익명 로그인 중 오류가 발생했습니다.');
     } finally {
       setIsLoading(false);
     }
@@ -86,6 +90,14 @@ export default function AuthPage() {
             회원가입
           </button>
         </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3 mb-4">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-red-800">{error}</p>
+          </div>
+        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">

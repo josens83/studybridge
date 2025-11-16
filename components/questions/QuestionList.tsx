@@ -1,68 +1,58 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Clock, MessageCircle, Eye, Coins } from 'lucide-react';
 import { Question } from '@/types';
+import { getQuestions } from '@/lib/supabase/questions';
 
 interface QuestionListProps {
   limit?: number;
+  subject?: string;
 }
 
-// Mock data for now - will be replaced with actual Supabase data
-const MOCK_QUESTIONS: Question[] = [
-  {
-    id: '1',
-    author_id: 'user1',
-    author_nickname: '익명123',
-    title: '수학 문제 풀이 도와주세요',
-    content: '이차방정식 문제인데 풀이 방법을 모르겠어요. x^2 + 5x + 6 = 0을 풀어주세요.',
-    subject: '수학',
-    grade_level: '고등학생',
-    image_urls: [],
-    coins_reward: 300,
-    is_urgent: false,
-    is_answered: false,
-    views: 45,
-    created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-    updated_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-  },
-  {
-    id: '2',
-    author_id: 'user2',
-    author_nickname: '학생ABC',
-    title: '영어 문법 질문이요',
-    content: '현재완료와 과거완료의 차이점을 설명해주세요.',
-    subject: '영어',
-    grade_level: '중학생',
-    image_urls: [],
-    coins_reward: 200,
-    is_urgent: false,
-    is_answered: true,
-    accepted_answer_id: 'ans1',
-    views: 89,
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-    updated_at: new Date(Date.now() - 1000 * 60 * 60 * 1).toISOString(),
-  },
-  {
-    id: '3',
-    author_id: 'user3',
-    author_nickname: '공부왕',
-    title: '과학 실험 보고서 작성법',
-    content: '실험 보고서의 구조와 작성 방법을 알려주세요.',
-    subject: '과학',
-    grade_level: '고등학생',
-    image_urls: [],
-    coins_reward: 500,
-    is_urgent: true,
-    is_answered: false,
-    views: 23,
-    created_at: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-    updated_at: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-  },
-];
+export default function QuestionList({ limit, subject }: QuestionListProps) {
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-export default function QuestionList({ limit }: QuestionListProps) {
-  const questions = limit ? MOCK_QUESTIONS.slice(0, limit) : MOCK_QUESTIONS;
+  useEffect(() => {
+    loadQuestions();
+  }, [limit, subject]);
+
+  const loadQuestions = async () => {
+    try {
+      setIsLoading(true);
+      const data = await getQuestions({ limit, subject });
+      setQuestions(data);
+    } catch (error) {
+      console.error('Error loading questions:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="text-center py-12">
+        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <p className="text-gray-600 mt-4">질문을 불러오는 중...</p>
+      </div>
+    );
+  }
+
+  if (questions.length === 0) {
+    return (
+      <div className="text-center py-12 bg-white rounded-lg">
+        <p className="text-gray-600">아직 질문이 없습니다.</p>
+        <Link
+          href="/ask"
+          className="inline-block mt-4 text-blue-600 hover:text-blue-700 font-semibold"
+        >
+          첫 질문을 올려보세요 →
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -114,10 +104,6 @@ function QuestionCard({ question }: { question: Question }) {
             <span className="flex items-center gap-1">
               <Eye className="w-4 h-4" />
               {question.views}
-            </span>
-            <span className="flex items-center gap-1">
-              <MessageCircle className="w-4 h-4" />
-              {Math.floor(Math.random() * 5)}
             </span>
           </div>
         </div>

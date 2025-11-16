@@ -1,62 +1,120 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload, X, Coins } from 'lucide-react';
+import { Upload, X, Coins, AlertCircle, Loader2 } from 'lucide-react';
 import { SUBJECTS, GRADE_LEVELS, QUESTION_COIN_COST } from '@/lib/utils/constants';
+import { useAuthStore } from '@/lib/store/auth';
+import { createQuestion } from '@/lib/supabase/questions';
+import { uploadImages } from '@/lib/supabase/storage';
 
 type UrgencyLevel = 'normal' | 'important' | 'urgent';
 
 export default function AskQuestionPage() {
   const router = useRouter();
+  const { user } = useAuthStore();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [subject, setSubject] = useState<string>('');
   const [gradeLevel, setGradeLevel] = useState<string>('');
   const [urgency, setUrgency] = useState<UrgencyLevel>('normal');
   const [images, setImages] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const coinCost = QUESTION_COIN_COST[urgency];
 
+  useEffect(() => {
+    // Redirect if not authenticated
+    if (!user) {
+      router.push('/auth');
+    }
+
+    // Check if user has enough coins
+    if (user && user.coins < coinCost) {
+      setError(`코인이 부족합니다. 필요한 코인: ${coinCost}, 보유 코인: ${user.coins}`);
+    } else {
+      setError(null);
+    }
+  }, [user, coinCost, router]);
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    setImages((prev) => [...prev, ...files].slice(0, 5)); // Max 5 images
+    const newImages = [...images, ...files].slice(0, 5);
+
+    setImages(newImages);
+
+    // Generate previews
+    const newPreviews = newImages.map((file) => URL.createObjectURL(file));
+    setPreviews(newPreviews);
   };
 
   const removeImage = (index: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== index));
+    const newImages = images.filter((_, i) => i !== index);
+    const newPreviews = previews.filter((_, i) => i !== index);
+
+    // Revoke old URL
+    URL.revokeObjectURL(previews[index]);
+
+    setImages(newImages);
+    setPreviews(newPreviews);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!user) {
+      setError('로그인이 필요합니다.');
+      return;
+    }
+
+    if (user.coins < coinCost) {
+      setError(`코인이 부족합니다. 필요한 코인: ${coinCost}, 보유 코인: ${user.coins}`);
+      return;
+    }
+
     setIsSubmitting(true);
+    setError(null);
 
     try {
-      // TODO: Implement actual submission to Supabase
-      console.log({
+      // Upload images first
+      let imageUrls: string[] = [];
+      if (images.length > 0) {
+        imageUrls = await uploadImages(images, user.id);
+      }
+
+      // Create question
+      const question = await createQuestion({
+        author_id: user.id,
+        author_nickname: user.nickname,
         title,
         content,
         subject,
-        gradeLevel,
-        urgency,
-        images,
-        coinCost,
+        grade_level: gradeLevel,
+        image_urls: imageUrls,
+        coins_reward: coinCost,
+        is_urgent: urgency === 'urgent',
       });
 
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Clean up
+      previews.forEach((url) => URL.revokeObjectURL(url));
 
-      // Redirect to questions list
-      router.push('/questions');
-    } catch (error) {
+      // Redirect to question detail
+      router.push(`/question/${question.id}`);
+    } catch (error: any) {
       console.error('Error submitting question:', error);
+      setError(error.message || '질문 등록 중 오류가 발생했습니다.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const isFormValid = title && content && subject && gradeLevel;
+  const isFormValid = title && content && subject && gradeLevel && user && user.coins >= coinCost;
+
+  if (!user) {
+    return null; // Will redirect
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-12">
@@ -66,6 +124,14 @@ export default function AskQuestionPage() {
           <p className="text-gray-600 mb-8">
             궁금한 점을 질문하고 전문가의 답변을 받아보세요
           </p>
+
+          {/* Error Message */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3 mb-6">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Title */}
@@ -80,6 +146,7 @@ export default function AskQuestionPage() {
                 placeholder="질문 제목을 입력하세요"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 required
+                disabled={isSubmitting}
               />
             </div>
 
@@ -94,6 +161,7 @@ export default function AskQuestionPage() {
                   onChange={(e) => setSubject(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
+                  disabled={isSubmitting}
                 >
                   <option value="">과목 선택</option>
                   {SUBJECTS.map((s) => (
@@ -113,6 +181,7 @@ export default function AskQuestionPage() {
                   onChange={(e) => setGradeLevel(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
+                  disabled={isSubmitting}
                 >
                   <option value="">학년 선택</option>
                   {GRADE_LEVELS.map((g) => (
@@ -136,6 +205,7 @@ export default function AskQuestionPage() {
                 rows={8}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 required
+                disabled={isSubmitting}
               />
             </div>
 
@@ -152,10 +222,13 @@ export default function AskQuestionPage() {
                   onChange={handleImageUpload}
                   className="hidden"
                   id="image-upload"
+                  disabled={isSubmitting || images.length >= 5}
                 />
                 <label
                   htmlFor="image-upload"
-                  className="cursor-pointer flex flex-col items-center"
+                  className={`cursor-pointer flex flex-col items-center ${
+                    isSubmitting || images.length >= 5 ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                 >
                   <Upload className="w-12 h-12 text-gray-400 mb-2" />
                   <span className="text-sm text-gray-600">
@@ -165,22 +238,24 @@ export default function AskQuestionPage() {
               </div>
 
               {/* Image Preview */}
-              {images.length > 0 && (
+              {previews.length > 0 && (
                 <div className="grid grid-cols-5 gap-2 mt-4">
-                  {images.map((image, index) => (
-                    <div key={index} className="relative">
+                  {previews.map((preview, index) => (
+                    <div key={index} className="relative group">
                       <img
-                        src={URL.createObjectURL(image)}
+                        src={preview}
                         alt={`Upload ${index + 1}`}
                         className="w-full h-20 object-cover rounded"
                       />
-                      <button
-                        type="button"
-                        onClick={() => removeImage(index)}
-                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+                      {!isSubmitting && (
+                        <button
+                          type="button"
+                          onClick={() => removeImage(index)}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -207,6 +282,7 @@ export default function AskQuestionPage() {
                           ? 'border-blue-500 bg-blue-50'
                           : 'border-gray-300 hover:border-blue-300'
                       }
+                      ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}
                     `}
                   >
                     <input
@@ -216,6 +292,7 @@ export default function AskQuestionPage() {
                       checked={urgency === option.value}
                       onChange={(e) => setUrgency(e.target.value as UrgencyLevel)}
                       className="hidden"
+                      disabled={isSubmitting}
                     />
                     <div className="text-center">
                       <div className="font-semibold">{option.label}</div>
@@ -237,21 +314,30 @@ export default function AskQuestionPage() {
               <div className="text-sm">
                 <span className="font-semibold">소모 코인:</span>{' '}
                 <span className="text-blue-600 font-bold">{coinCost}</span>
+                <span className="text-gray-600 ml-2">(보유: {user.coins})</span>
               </div>
               <div className="flex gap-4">
                 <button
                   type="button"
                   onClick={() => router.back()}
-                  className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                  disabled={isSubmitting}
+                  className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   취소
                 </button>
                 <button
                   type="submit"
                   disabled={!isFormValid || isSubmitting}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  {isSubmitting ? '등록 중...' : '질문 등록'}
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>등록 중...</span>
+                    </>
+                  ) : (
+                    <span>질문 등록</span>
+                  )}
                 </button>
               </div>
             </div>
