@@ -2,10 +2,23 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Menu, X, BookOpen, Coins, User } from 'lucide-react';
+import { Menu, X, BookOpen, Coins, User, LogOut } from 'lucide-react';
+import { useAuthStore } from '@/lib/store/auth';
+import { signOut } from '@/lib/supabase/auth';
+import NotificationBell from '@/components/ui/NotificationBell';
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { user, logout } = useAuthStore();
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      logout();
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
+  };
 
   return (
     <header className="bg-white shadow-sm sticky top-0 z-50">
@@ -35,19 +48,51 @@ export default function Header() {
               >
                 질문하기
               </Link>
-              <Link
-                href="/dashboard"
-                className="flex items-center gap-2 text-gray-700 hover:text-blue-600 transition"
-              >
-                <Coins className="w-5 h-5" />
-                <span>1,000</span>
-              </Link>
-              <Link
-                href="/dashboard"
-                className="flex items-center gap-2 text-gray-700 hover:text-blue-600 transition"
-              >
-                <User className="w-5 h-5" />
-              </Link>
+
+              {user ? (
+                <>
+                  <Link
+                    href="/dashboard"
+                    className="flex items-center gap-2 text-gray-700 hover:text-blue-600 transition"
+                  >
+                    <Coins className="w-5 h-5" />
+                    <span>{user.coins.toLocaleString()}</span>
+                  </Link>
+
+                  <NotificationBell />
+
+                  <div className="relative group">
+                    <button className="flex items-center gap-2 text-gray-700 hover:text-blue-600 transition">
+                      <User className="w-5 h-5" />
+                      <span className="max-w-[100px] truncate">{user.nickname}</span>
+                    </button>
+
+                    {/* Dropdown */}
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 hidden group-hover:block">
+                      <Link
+                        href="/dashboard"
+                        className="block px-4 py-2 hover:bg-gray-50 transition"
+                      >
+                        대시보드
+                      </Link>
+                      <button
+                        onClick={handleLogout}
+                        className="w-full text-left px-4 py-2 hover:bg-gray-50 transition flex items-center gap-2 text-red-600"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        로그아웃
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <Link
+                  href="/auth"
+                  className="text-gray-700 hover:text-blue-600 transition font-semibold"
+                >
+                  로그인
+                </Link>
+              )}
             </div>
           </div>
 
