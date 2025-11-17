@@ -45,22 +45,22 @@ export default function Footer() {
             <h3 className="font-semibold text-white mb-4">고객지원</h3>
             <ul className="space-y-2 text-sm">
               <li>
-                <Link href="/faq" className="hover:text-white transition">
+                <Link href="/support/faq" className="hover:text-white transition">
                   자주 묻는 질문
                 </Link>
               </li>
               <li>
-                <Link href="/contact" className="hover:text-white transition">
+                <Link href="/support/contact" className="hover:text-white transition">
                   문의하기
                 </Link>
               </li>
               <li>
-                <Link href="/terms" className="hover:text-white transition">
+                <Link href="/legal/terms" className="hover:text-white transition">
                   이용약관
                 </Link>
               </li>
               <li>
-                <Link href="/privacy" className="hover:text-white transition">
+                <Link href="/legal/privacy" className="hover:text-white transition">
                   개인정보처리방침
                 </Link>
               </li>

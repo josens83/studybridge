@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Menu, X, BookOpen, Coins, User, LogOut, Bookmark } from 'lucide-react';
+import { Menu, X, BookOpen, Coins, User, LogOut, Bookmark, Settings } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { signOut } from '@/lib/supabase/auth';
 import NotificationBell from '@/components/ui/NotificationBell';
@@ -95,6 +95,14 @@ export default function Header() {
                         className="block px-4 py-2 hover:bg-gray-50 transition"
                       >
                         구독 관리
+                      </Link>
+                      <div className="border-t border-gray-200"></div>
+                      <Link
+                        href="/settings/profile"
+                        className="block px-4 py-2 hover:bg-gray-50 transition flex items-center gap-2"
+                      >
+                        <Settings className="w-4 h-4" />
+                        설정
                       </Link>
                       <button
                         onClick={handleLogout}
