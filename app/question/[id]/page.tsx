@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Clock, Eye, Coins, ThumbsUp, Award, AlertCircle, Loader2, ImageIcon, Flag, Edit, Trash2, X, Check } from 'lucide-react';
+import { Clock, Eye, Coins, ThumbsUp, Award, AlertCircle, Loader2, ImageIcon, Flag, Edit, Trash2, X, Check, Bookmark } from 'lucide-react';
 import type { Question, Answer } from '@/types';
 import { getQuestionById, updateQuestion, deleteQuestion } from '@/lib/supabase/questions';
 import { getAnswersByQuestionId, createAnswer, acceptAnswer, upvoteAnswer, updateAnswer, deleteAnswer } from '@/lib/supabase/answers';
 import { useAuthStore } from '@/lib/store/auth';
 import ReportModal from '@/components/ui/ReportModal';
+import { toggleBookmark, isBookmarked } from '@/lib/supabase/bookmarks';
 
 export default function QuestionDetailPage() {
   const params = useParams();
@@ -29,6 +30,10 @@ export default function QuestionDetailPage() {
   const [editingAnswerId, setEditingAnswerId] = useState<string | null>(null);
   const [editAnswerContent, setEditAnswerContent] = useState('');
 
+  // Bookmark state
+  const [bookmarked, setBookmarked] = useState(false);
+  const [bookmarkLoading, setBookmarkLoading] = useState(false);
+
   // Report modal state
   const [reportModal, setReportModal] = useState<{
     isOpen: boolean;
@@ -48,8 +53,23 @@ export default function QuestionDetailPage() {
     if (params.id) {
       loadQuestion(params.id as string);
       loadAnswers(params.id as string);
+      loadBookmarkStatus(params.id as string);
     }
-  }, [params.id]);
+  }, [params.id, user]);
+
+  const loadBookmarkStatus = async (questionId: string) => {
+    if (!user) {
+      setBookmarked(false);
+      return;
+    }
+
+    try {
+      const status = await isBookmarked(user.id, questionId);
+      setBookmarked(status);
+    } catch (error) {
+      console.error('Failed to load bookmark status:', error);
+    }
+  };
 
   const loadQuestion = async (id: string) => {
     try {
@@ -287,6 +307,27 @@ export default function QuestionDetailPage() {
     }
   };
 
+  const handleToggleBookmark = async () => {
+    if (!user) {
+      alert('북마크를 사용하려면 로그인이 필요합니다.');
+      router.push('/auth');
+      return;
+    }
+
+    if (!question) return;
+
+    setBookmarkLoading(true);
+    try {
+      const nowBookmarked = await toggleBookmark(user.id, question.id);
+      setBookmarked(nowBookmarked);
+    } catch (error) {
+      console.error('Failed to toggle bookmark:', error);
+      alert('북마크 처리 중 오류가 발생했습니다.');
+    } finally {
+      setBookmarkLoading(false);
+    }
+  };
+
   if (isLoadingQuestion) {
     return (
       <div className="min-h-screen bg-gray-50 py-12 flex items-center justify-center">
@@ -400,20 +441,37 @@ export default function QuestionDetailPage() {
             <>
               <h1 className="text-3xl font-bold mb-4">{question.title}</h1>
 
-              <div className="flex items-center gap-4 text-sm text-gray-600 mb-6">
-                <span>{question.author_nickname}</span>
-                <span className="flex items-center gap-1">
-                  <Clock className="w-4 h-4" />
-                  {timeAgo}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Eye className="w-4 h-4" />
-                  {question.views}
-                </span>
-                <span className="flex items-center gap-1 text-yellow-600 font-semibold">
-                  <Coins className="w-5 h-5" />
-                  {question.coins_reward}
-                </span>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-4 text-sm text-gray-600">
+                  <span>{question.author_nickname}</span>
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-4 h-4" />
+                    {timeAgo}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Eye className="w-4 h-4" />
+                    {question.views}
+                  </span>
+                  <span className="flex items-center gap-1 text-yellow-600 font-semibold">
+                    <Coins className="w-5 h-5" />
+                    {question.coins_reward}
+                  </span>
+                </div>
+                <button
+                  onClick={handleToggleBookmark}
+                  disabled={bookmarkLoading}
+                  className={`p-2 rounded-lg transition flex items-center gap-2 ${
+                    bookmarked
+                      ? 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  } ${bookmarkLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  title={bookmarked ? '북마크 해제' : '북마크 추가'}
+                >
+                  <Bookmark className={`w-5 h-5 ${bookmarked ? 'fill-current' : ''}`} />
+                  <span className="text-sm font-semibold">
+                    {bookmarked ? '저장됨' : '저장'}
+                  </span>
+                </button>
               </div>
 
               <div className="prose max-w-none mb-6">

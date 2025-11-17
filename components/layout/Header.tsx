@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Menu, X, BookOpen, Coins, User, LogOut } from 'lucide-react';
+import { Menu, X, BookOpen, Coins, User, LogOut, Bookmark } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { signOut } from '@/lib/supabase/auth';
 import NotificationBell from '@/components/ui/NotificationBell';
@@ -75,6 +75,13 @@ export default function Header() {
                         className="block px-4 py-2 hover:bg-gray-50 transition"
                       >
                         대시보드
+                      </Link>
+                      <Link
+                        href="/bookmarks"
+                        className="block px-4 py-2 hover:bg-gray-50 transition flex items-center gap-2 text-blue-600"
+                      >
+                        <Bookmark className="w-4 h-4" />
+                        북마크
                       </Link>
                       <Link
                         href="/shop"
@@ -158,6 +165,16 @@ export default function Header() {
               >
                 내 대시보드
               </Link>
+              {user && (
+                <Link
+                  href="/bookmarks"
+                  className="text-gray-700 hover:text-blue-600 transition flex items-center gap-2"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  <Bookmark className="w-4 h-4" />
+                  북마크
+                </Link>
+              )}
             </div>
           </div>
         )}
