@@ -1,8 +1,24 @@
+'use client';
+
+import { useState } from 'react';
 import QuestionList from '@/components/questions/QuestionList';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
+import { SUBJECTS } from '@/lib/utils/constants';
 
 export default function QuestionsPage() {
+  const [selectedSubject, setSelectedSubject] = useState<string | undefined>(undefined);
+
+  const filters = ['전체', ...SUBJECTS];
+
+  const handleFilterClick = (filter: string) => {
+    if (filter === '전체') {
+      setSelectedSubject(undefined);
+    } else {
+      setSelectedSubject(filter);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-12">
       <div className="container mx-auto px-4">
@@ -23,26 +39,36 @@ export default function QuestionsPage() {
         {/* Filters */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
           <div className="flex flex-wrap gap-4">
-            <FilterButton label="전체" active />
-            <FilterButton label="국어" />
-            <FilterButton label="영어" />
-            <FilterButton label="수학" />
-            <FilterButton label="과학" />
-            <FilterButton label="사회" />
-            <FilterButton label="역사" />
+            {filters.map((filter) => (
+              <FilterButton
+                key={filter}
+                label={filter}
+                active={filter === '전체' ? !selectedSubject : selectedSubject === filter}
+                onClick={() => handleFilterClick(filter)}
+              />
+            ))}
           </div>
         </div>
 
         {/* Questions List */}
-        <QuestionList />
+        <QuestionList subject={selectedSubject} />
       </div>
     </div>
   );
 }
 
-function FilterButton({ label, active = false }: { label: string; active?: boolean }) {
+function FilterButton({
+  label,
+  active = false,
+  onClick,
+}: {
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
+      onClick={onClick}
       className={`px-4 py-2 rounded-lg font-semibold transition ${
         active
           ? 'bg-blue-600 text-white'

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Coins,
@@ -9,23 +10,83 @@ import {
   MessageCircle,
   CheckCircle,
   Clock,
+  Loader2,
 } from 'lucide-react';
+import { useAuthStore } from '@/lib/store/auth';
+import {
+  getUserStats,
+  getRecentActivities,
+  getUserQuestions,
+  getUserAnswers,
+  getAllTransactions,
+  type UserStats,
+  type Activity,
+  type Transaction,
+} from '@/lib/supabase/dashboard';
+import type { Question, Answer } from '@/types';
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<'overview' | 'questions' | 'answers' | 'history'>(
     'overview'
   );
 
-  // Mock user data
-  const user = {
-    nickname: '익명123',
-    coins: 1500,
-    points: 350,
-    subscription_tier: 'premium',
-    questions_asked: 12,
-    answers_provided: 8,
-    best_answers: 3,
+  const [stats, setStats] = useState<UserStats | null>(null);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [answers, setAnswers] = useState<(Answer & { question: Question })[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) {
+      router.push('/auth');
+      return;
+    }
+
+    loadDashboardData();
+  }, [user, router]);
+
+  const loadDashboardData = async () => {
+    if (!user) return;
+
+    try {
+      setIsLoading(true);
+      const [statsData, activitiesData, questionsData, answersData, transactionsData] = await Promise.all([
+        getUserStats(user.id),
+        getRecentActivities(user.id, 5),
+        getUserQuestions(user.id),
+        getUserAnswers(user.id),
+        getAllTransactions(user.id, 20),
+      ]);
+
+      setStats(statsData);
+      setActivities(activitiesData);
+      setQuestions(questionsData);
+      setAnswers(answersData);
+      setTransactions(transactionsData);
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  if (!user) {
+    return null;
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-12 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600">대시보드를 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-12">
@@ -70,22 +131,22 @@ export default function DashboardPage() {
         <div className="grid md:grid-cols-4 gap-6 mb-8">
           <StatCard
             icon={<MessageCircle className="w-8 h-8 text-blue-600" />}
-            value={user.questions_asked.toString()}
+            value={stats?.questions_asked.toString() || '0'}
             label="질문한 개수"
           />
           <StatCard
             icon={<CheckCircle className="w-8 h-8 text-green-600" />}
-            value={user.answers_provided.toString()}
+            value={stats?.answers_provided.toString() || '0'}
             label="답변한 개수"
           />
           <StatCard
             icon={<Award className="w-8 h-8 text-yellow-600" />}
-            value={user.best_answers.toString()}
+            value={stats?.best_answers.toString() || '0'}
             label="채택된 답변"
           />
           <StatCard
             icon={<TrendingUp className="w-8 h-8 text-purple-600" />}
-            value="12%"
+            value={`${stats?.acceptance_rate || 0}%`}
             label="채택률"
           />
         </div>
@@ -138,10 +199,10 @@ export default function DashboardPage() {
           </div>
 
           <div className="p-8">
-            {activeTab === 'overview' && <OverviewTab />}
-            {activeTab === 'questions' && <QuestionsTab />}
-            {activeTab === 'answers' && <AnswersTab />}
-            {activeTab === 'history' && <HistoryTab />}
+            {activeTab === 'overview' && <OverviewTab activities={activities} />}
+            {activeTab === 'questions' && <QuestionsTab questions={questions} />}
+            {activeTab === 'answers' && <AnswersTab answers={answers} />}
+            {activeTab === 'history' && <HistoryTab transactions={transactions} />}
           </div>
         </div>
       </div>
@@ -169,97 +230,163 @@ function StatCard({
   );
 }
 
-function OverviewTab() {
+function OverviewTab({ activities }: { activities: Activity[] }) {
+  const getActivityIcon = (type: Activity['type']) => {
+    switch (type) {
+      case 'question':
+        return <MessageCircle className="w-5 h-5 text-blue-600" />;
+      case 'answer':
+        return <CheckCircle className="w-5 h-5 text-green-600" />;
+      case 'accepted':
+        return <Award className="w-5 h-5 text-yellow-600" />;
+      default:
+        return <Clock className="w-5 h-5 text-gray-600" />;
+    }
+  };
+
+  const getTimeAgo = (date: string) => {
+    const seconds = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
+    if (seconds < 60) return '방금 전';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}분 전`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}시간 전`;
+    if (seconds < 604800) return `${Math.floor(seconds / 86400)}일 전`;
+    return `${Math.floor(seconds / 604800)}주 전`;
+  };
+
   return (
     <div>
       <h3 className="text-xl font-bold mb-4">최근 활동</h3>
-      <div className="space-y-4">
-        <ActivityItem
-          icon={<MessageCircle className="w-5 h-5 text-blue-600" />}
-          title="수학 문제 풀이 도와주세요"
-          description="답변 2개 • 30분 전"
-        />
-        <ActivityItem
-          icon={<CheckCircle className="w-5 h-5 text-green-600" />}
-          title="영어 문법 질문에 답변이 채택되었습니다"
-          description="+300 코인 • 2시간 전"
-        />
-        <ActivityItem
-          icon={<Clock className="w-5 h-5 text-orange-600" />}
-          title="과학 실험 보고서 작성법"
-          description="답변 대기 중 • 5시간 전"
-        />
-      </div>
+      {activities.length === 0 ? (
+        <div className="text-center py-12 text-gray-600">
+          아직 활동 내역이 없습니다.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {activities.map((activity) => (
+            <ActivityItem
+              key={activity.id}
+              icon={getActivityIcon(activity.type)}
+              title={activity.title}
+              description={`${activity.description} • ${getTimeAgo(activity.created_at)}`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function QuestionsTab() {
+function QuestionsTab({ questions }: { questions: Question[] }) {
+  const getTimeAgo = (date: string) => {
+    const seconds = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
+    if (seconds < 60) return '방금 전';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}분 전`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}시간 전`;
+    if (seconds < 604800) return `${Math.floor(seconds / 86400)}일 전`;
+    return `${Math.floor(seconds / 604800)}주 전`;
+  };
+
   return (
     <div>
       <h3 className="text-xl font-bold mb-4">내가 질문한 내용</h3>
-      <div className="space-y-4">
-        <QuestionItem
-          title="수학 문제 풀이 도와주세요"
-          subject="수학"
-          status="답변 완료"
-          date="30분 전"
-        />
-        <QuestionItem
-          title="과학 실험 보고서 작성법"
-          subject="과학"
-          status="답변 대기"
-          date="5시간 전"
-        />
-      </div>
+      {questions.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-gray-600 mb-4">아직 질문한 내용이 없습니다.</p>
+          <Link
+            href="/ask"
+            className="inline-block px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+          >
+            질문하러 가기
+          </Link>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {questions.map((question) => (
+            <Link key={question.id} href={`/question/${question.id}`}>
+              <QuestionItem
+                title={question.title}
+                subject={question.subject}
+                status={question.is_answered ? '답변 완료' : '답변 대기'}
+                date={getTimeAgo(question.created_at)}
+              />
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function AnswersTab() {
+function AnswersTab({ answers }: { answers: (Answer & { question: Question })[] }) {
+  const getTimeAgo = (date: string) => {
+    const seconds = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
+    if (seconds < 60) return '방금 전';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}분 전`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}시간 전`;
+    if (seconds < 604800) return `${Math.floor(seconds / 86400)}일 전`;
+    return `${Math.floor(seconds / 604800)}주 전`;
+  };
+
   return (
     <div>
       <h3 className="text-xl font-bold mb-4">내가 답변한 내용</h3>
-      <div className="space-y-4">
-        <AnswerItem
-          question="영어 문법 질문이요"
-          status="채택됨"
-          date="2시간 전"
-        />
-        <AnswerItem
-          question="역사 연표 정리 방법"
-          status="답변 완료"
-          date="1일 전"
-        />
-      </div>
+      {answers.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-gray-600 mb-4">아직 답변한 내용이 없습니다.</p>
+          <Link
+            href="/questions"
+            className="inline-block px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+          >
+            답변하러 가기
+          </Link>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {answers.map((answer) => (
+            <Link key={answer.id} href={`/question/${answer.question.id}`}>
+              <AnswerItem
+                question={answer.question.title}
+                status={answer.is_accepted ? '채택됨' : '답변 완료'}
+                date={getTimeAgo(answer.created_at)}
+              />
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function HistoryTab() {
+function HistoryTab({ transactions }: { transactions: Transaction[] }) {
+  const getTimeAgo = (date: string) => {
+    const seconds = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
+    if (seconds < 60) return '방금 전';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}분 전`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}시간 전`;
+    if (seconds < 604800) return `${Math.floor(seconds / 86400)}일 전`;
+    return `${Math.floor(seconds / 604800)}주 전`;
+  };
+
   return (
     <div>
       <h3 className="text-xl font-bold mb-4">거래 내역</h3>
-      <div className="space-y-4">
-        <TransactionItem
-          type="earn"
-          description="답변 채택 보상"
-          amount="+300"
-          date="2시간 전"
-        />
-        <TransactionItem
-          type="spend"
-          description="긴급 질문 등록"
-          amount="-500"
-          date="5시간 전"
-        />
-        <TransactionItem
-          type="purchase"
-          description="코인 구매 (1,000개)"
-          amount="+1,000"
-          date="2일 전"
-        />
-      </div>
+      {transactions.length === 0 ? (
+        <div className="text-center py-12 text-gray-600">
+          아직 거래 내역이 없습니다.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {transactions.map((transaction) => (
+            <TransactionItem
+              key={transaction.id}
+              type={transaction.type}
+              description={`${transaction.description} (${transaction.currency === 'coins' ? '코인' : '포인트'})`}
+              amount={transaction.amount > 0 ? `+${transaction.amount}` : transaction.amount.toString()}
+              date={getTimeAgo(transaction.created_at)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
