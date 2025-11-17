@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Clock, Eye, Coins, ThumbsUp, Award, AlertCircle, Loader2, ImageIcon } from 'lucide-react';
+import { Clock, Eye, Coins, ThumbsUp, Award, AlertCircle, Loader2, ImageIcon, Flag } from 'lucide-react';
 import type { Question, Answer } from '@/types';
 import { getQuestionById } from '@/lib/supabase/questions';
 import { getAnswersByQuestionId, createAnswer, acceptAnswer, upvoteAnswer } from '@/lib/supabase/answers';
 import { useAuthStore } from '@/lib/store/auth';
+import ReportModal from '@/components/ui/ReportModal';
 
 export default function QuestionDetailPage() {
   const params = useParams();
@@ -20,6 +21,21 @@ export default function QuestionDetailPage() {
   const [isLoadingAnswers, setIsLoadingAnswers] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Report modal state
+  const [reportModal, setReportModal] = useState<{
+    isOpen: boolean;
+    contentType: 'question' | 'answer';
+    contentId: string;
+    reportedUserId: string;
+    contentTitle: string;
+  }>({
+    isOpen: false,
+    contentType: 'question',
+    contentId: '',
+    reportedUserId: '',
+    contentTitle: '',
+  });
 
   useEffect(() => {
     if (params.id) {
@@ -128,6 +144,40 @@ export default function QuestionDetailPage() {
     }
   };
 
+  const handleReportQuestion = () => {
+    if (!user) {
+      alert('로그인이 필요합니다.');
+      router.push('/auth');
+      return;
+    }
+
+    if (!question) return;
+
+    setReportModal({
+      isOpen: true,
+      contentType: 'question',
+      contentId: question.id,
+      reportedUserId: question.author_id,
+      contentTitle: question.title,
+    });
+  };
+
+  const handleReportAnswer = (answer: Answer) => {
+    if (!user) {
+      alert('로그인이 필요합니다.');
+      router.push('/auth');
+      return;
+    }
+
+    setReportModal({
+      isOpen: true,
+      contentType: 'answer',
+      contentId: answer.id,
+      reportedUserId: answer.author_id,
+      contentTitle: `${answer.author_nickname}님의 답변`,
+    });
+  };
+
   if (isLoadingQuestion) {
     return (
       <div className="min-h-screen bg-gray-50 py-12 flex items-center justify-center">
@@ -215,7 +265,7 @@ export default function QuestionDetailPage() {
           </div>
 
           {question.image_urls && question.image_urls.length > 0 && (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 mb-6">
               {question.image_urls.map((url, index) => (
                 <img
                   key={index}
@@ -224,6 +274,19 @@ export default function QuestionDetailPage() {
                   className="rounded-lg border border-gray-200"
                 />
               ))}
+            </div>
+          )}
+
+          {/* Report Button */}
+          {user && user.id !== question.author_id && (
+            <div className="flex justify-end pt-4 border-t border-gray-200">
+              <button
+                onClick={handleReportQuestion}
+                className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+              >
+                <Flag className="w-4 h-4" />
+                신고하기
+              </button>
             </div>
           )}
         </div>
@@ -254,6 +317,8 @@ export default function QuestionDetailPage() {
                   canAccept={!question.accepted_answer_id && isQuestionAuthor}
                   onAccept={() => handleAcceptAnswer(answer.id)}
                   onUpvote={() => handleUpvote(answer.id)}
+                  onReport={() => handleReportAnswer(answer)}
+                  currentUserId={user?.id}
                 />
               ))}
             </div>
@@ -303,6 +368,16 @@ export default function QuestionDetailPage() {
             </button>
           </div>
         )}
+
+        {/* Report Modal */}
+        <ReportModal
+          isOpen={reportModal.isOpen}
+          onClose={() => setReportModal({ ...reportModal, isOpen: false })}
+          contentType={reportModal.contentType}
+          contentId={reportModal.contentId}
+          reportedUserId={reportModal.reportedUserId}
+          contentTitle={reportModal.contentTitle}
+        />
       </div>
     </div>
   );
@@ -314,12 +389,16 @@ function AnswerCard({
   canAccept,
   onAccept,
   onUpvote,
+  onReport,
+  currentUserId,
 }: {
   answer: Answer;
   isQuestionAuthor: boolean;
   canAccept: boolean;
   onAccept: () => void;
   onUpvote: () => void;
+  onReport: () => void;
+  currentUserId?: string;
 }) {
   const timeAgo = getTimeAgo(new Date(answer.created_at));
 
@@ -384,6 +463,18 @@ function AnswerCard({
               className="rounded-lg border border-gray-200"
             />
           ))}
+        </div>
+      )}
+
+      {currentUserId && currentUserId !== answer.author_id && (
+        <div className="flex justify-end pt-4 mt-4 border-t border-gray-200">
+          <button
+            onClick={onReport}
+            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+          >
+            <Flag className="w-4 h-4" />
+            신고하기
+          </button>
         </div>
       )}
     </div>
