@@ -52,8 +52,9 @@ export default function Header() {
               {user ? (
                 <>
                   <Link
-                    href="/dashboard"
-                    className="flex items-center gap-2 text-gray-700 hover:text-blue-600 transition"
+                    href="/shop"
+                    className="flex items-center gap-2 px-3 py-2 bg-yellow-50 text-yellow-700 rounded-lg hover:bg-yellow-100 transition font-semibold border border-yellow-200"
+                    title="코인 충전하기"
                   >
                     <Coins className="w-5 h-5" />
                     <span>{user.coins.toLocaleString()}</span>
@@ -74,6 +75,19 @@ export default function Header() {
                         className="block px-4 py-2 hover:bg-gray-50 transition"
                       >
                         대시보드
+                      </Link>
+                      <Link
+                        href="/shop"
+                        className="block px-4 py-2 hover:bg-gray-50 transition flex items-center gap-2 text-yellow-600"
+                      >
+                        <Coins className="w-4 h-4" />
+                        코인 충전
+                      </Link>
+                      <Link
+                        href="/pricing"
+                        className="block px-4 py-2 hover:bg-gray-50 transition"
+                      >
+                        구독 관리
                       </Link>
                       <button
                         onClick={handleLogout}

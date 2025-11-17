@@ -4,25 +4,39 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Clock, MessageCircle, Eye, Coins } from 'lucide-react';
 import { Question } from '@/types';
-import { getQuestions } from '@/lib/supabase/questions';
+import { getQuestions, searchQuestions } from '@/lib/supabase/questions';
 
 interface QuestionListProps {
   limit?: number;
   subject?: string;
+  searchTerm?: string;
 }
 
-export default function QuestionList({ limit, subject }: QuestionListProps) {
+export default function QuestionList({ limit, subject, searchTerm }: QuestionListProps) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadQuestions();
-  }, [limit, subject]);
+  }, [limit, subject, searchTerm]);
 
   const loadQuestions = async () => {
     try {
       setIsLoading(true);
-      const data = await getQuestions({ limit, subject });
+      let data: Question[];
+
+      if (searchTerm && searchTerm.trim()) {
+        // Use search function when search term is provided
+        data = await searchQuestions(searchTerm);
+        // Apply subject filter if needed
+        if (subject) {
+          data = data.filter(q => q.subject === subject);
+        }
+      } else {
+        // Regular query
+        data = await getQuestions({ limit, subject });
+      }
+
       setQuestions(data);
     } catch (error) {
       console.error('Error loading questions:', error);

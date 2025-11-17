@@ -1,5 +1,96 @@
 import { supabase } from './client';
 
+export interface CoinPackage {
+  id: string;
+  name: string;
+  price: number;
+  coins: number;
+  bonus: number;
+  totalCoins: number;
+  popular?: boolean;
+  savings?: string;
+}
+
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  tier: 'premium' | 'premium_plus';
+  price: number;
+  features: string[];
+  popular?: boolean;
+}
+
+// Coin packages available for purchase
+export const COIN_PACKAGES: CoinPackage[] = [
+  {
+    id: 'basic',
+    name: '기본',
+    price: 5000,
+    coins: 1000,
+    bonus: 0,
+    totalCoins: 1000,
+  },
+  {
+    id: 'standard',
+    name: '인기',
+    price: 14000,
+    coins: 3000,
+    bonus: 500,
+    totalCoins: 3500,
+    popular: true,
+    savings: '10% 할인',
+  },
+  {
+    id: 'premium',
+    name: '프리미엄',
+    price: 22000,
+    coins: 5000,
+    bonus: 1000,
+    totalCoins: 6000,
+    savings: '15% 할인',
+  },
+  {
+    id: 'mega',
+    name: '메가',
+    price: 40000,
+    coins: 10000,
+    bonus: 3000,
+    totalCoins: 13000,
+    savings: '20% 할인',
+  },
+];
+
+// Subscription plans
+export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
+  {
+    id: 'premium',
+    name: '프리미엄',
+    tier: 'premium',
+    price: 39000,
+    features: [
+      '무제한 질문',
+      '광고 제거',
+      '우선 답변',
+      'AI 도우미 (베타)',
+      '질문 우선 노출',
+    ],
+    popular: true,
+  },
+  {
+    id: 'premium_plus',
+    name: '프리미엄+',
+    tier: 'premium_plus',
+    price: 59000,
+    features: [
+      '프리미엄 모든 기능',
+      '월 20회 튜터 매칭',
+      '1:1 맞춤 학습 지도',
+      '학습 리포트 제공',
+      '과제 첨삭 서비스',
+    ],
+  },
+];
+
 // Process coin purchase
 export async function purchaseCoins(
   userId: string,
@@ -7,18 +98,10 @@ export async function purchaseCoins(
   orderId: string,
   paymentKey?: string
 ) {
-  // Calculate coins to add based on package
-  const packages = [
-    { price: 5000, coins: 1000, bonus: 0 },
-    { price: 14000, coins: 3000, bonus: 500 },
-    { price: 22000, coins: 5000, bonus: 1000 },
-    { price: 40000, coins: 10000, bonus: 3000 },
-  ];
-
-  const pkg = packages.find((p) => p.price === packagePrice);
+  const pkg = COIN_PACKAGES.find((p) => p.price === packagePrice);
   if (!pkg) throw new Error('Invalid package');
 
-  const totalCoins = pkg.coins + pkg.bonus;
+  const totalCoins = pkg.totalCoins;
 
   // Create payment record
   const { data: payment, error: paymentError } = await supabase

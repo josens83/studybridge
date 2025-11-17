@@ -1,0 +1,16 @@
+# *
+User-agent: *
+Allow: /
+
+# Disallow private pages
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /shop/success
+Disallow: /shop/fail
+Disallow: /pricing/success
+
+# Host
+Host: https://studybridge.com
+
+# Sitemap
+Sitemap: https://studybridge.com/sitemap.xml

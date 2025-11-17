@@ -3,11 +3,13 @@
 import { useState } from 'react';
 import QuestionList from '@/components/questions/QuestionList';
 import Link from 'next/link';
-import { Plus } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { SUBJECTS } from '@/lib/utils/constants';
 
 export default function QuestionsPage() {
   const [selectedSubject, setSelectedSubject] = useState<string | undefined>(undefined);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchTerm, setSearchTerm] = useState(''); // For actual search
 
   const filters = ['전체', ...SUBJECTS];
 
@@ -17,6 +19,11 @@ export default function QuestionsPage() {
     } else {
       setSelectedSubject(filter);
     }
+  };
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearchTerm(searchQuery);
   };
 
   return (
@@ -36,6 +43,45 @@ export default function QuestionsPage() {
           </Link>
         </div>
 
+        {/* Search Bar */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <form onSubmit={handleSearch} className="flex gap-3">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="질문 제목이나 내용으로 검색..."
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <button
+              type="submit"
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold"
+            >
+              검색
+            </button>
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSearchTerm('');
+                }}
+                className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-semibold"
+              >
+                초기화
+              </button>
+            )}
+          </form>
+          {searchTerm && (
+            <p className="mt-3 text-sm text-gray-600">
+              '<span className="font-semibold text-blue-600">{searchTerm}</span>' 검색 결과
+            </p>
+          )}
+        </div>
+
         {/* Filters */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
           <div className="flex flex-wrap gap-4">
@@ -51,7 +97,7 @@ export default function QuestionsPage() {
         </div>
 
         {/* Questions List */}
-        <QuestionList subject={selectedSubject} />
+        <QuestionList subject={selectedSubject} searchTerm={searchTerm} />
       </div>
     </div>
   );
