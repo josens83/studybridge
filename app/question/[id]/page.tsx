@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Clock, Eye, Coins, ThumbsUp, Award, AlertCircle, Loader2, ImageIcon, Flag } from 'lucide-react';
+import { Clock, Eye, Coins, ThumbsUp, Award, AlertCircle, Loader2, ImageIcon, Flag, Edit, Trash2, X, Check } from 'lucide-react';
 import type { Question, Answer } from '@/types';
-import { getQuestionById } from '@/lib/supabase/questions';
-import { getAnswersByQuestionId, createAnswer, acceptAnswer, upvoteAnswer } from '@/lib/supabase/answers';
+import { getQuestionById, updateQuestion, deleteQuestion } from '@/lib/supabase/questions';
+import { getAnswersByQuestionId, createAnswer, acceptAnswer, upvoteAnswer, updateAnswer, deleteAnswer } from '@/lib/supabase/answers';
 import { useAuthStore } from '@/lib/store/auth';
 import ReportModal from '@/components/ui/ReportModal';
 
@@ -21,6 +21,13 @@ export default function QuestionDetailPage() {
   const [isLoadingAnswers, setIsLoadingAnswers] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Edit mode states
+  const [isEditingQuestion, setIsEditingQuestion] = useState(false);
+  const [editQuestionTitle, setEditQuestionTitle] = useState('');
+  const [editQuestionContent, setEditQuestionContent] = useState('');
+  const [editingAnswerId, setEditingAnswerId] = useState<string | null>(null);
+  const [editAnswerContent, setEditAnswerContent] = useState('');
 
   // Report modal state
   const [reportModal, setReportModal] = useState<{
@@ -178,6 +185,108 @@ export default function QuestionDetailPage() {
     });
   };
 
+  // Question edit/delete handlers
+  const handleStartEditQuestion = () => {
+    if (!question) return;
+    setEditQuestionTitle(question.title);
+    setEditQuestionContent(question.content);
+    setIsEditingQuestion(true);
+  };
+
+  const handleCancelEditQuestion = () => {
+    setIsEditingQuestion(false);
+    setEditQuestionTitle('');
+    setEditQuestionContent('');
+  };
+
+  const handleSaveQuestion = async () => {
+    if (!question || !editQuestionTitle.trim() || !editQuestionContent.trim()) {
+      alert('제목과 내용을 모두 입력해주세요.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const updated = await updateQuestion(question.id, {
+        title: editQuestionTitle,
+        content: editQuestionContent,
+      });
+      setQuestion(updated);
+      setIsEditingQuestion(false);
+      alert('질문이 수정되었습니다.');
+    } catch (error) {
+      alert('질문 수정 중 오류가 발생했습니다.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteQuestion = async () => {
+    if (!question) return;
+
+    if (!confirm('질문을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await deleteQuestion(question.id);
+      alert('질문이 삭제되었습니다.');
+      router.push('/questions');
+    } catch (error) {
+      alert('질문 삭제 중 오류가 발생했습니다.');
+      setIsSubmitting(false);
+    }
+  };
+
+  // Answer edit/delete handlers
+  const handleStartEditAnswer = (answer: Answer) => {
+    setEditingAnswerId(answer.id);
+    setEditAnswerContent(answer.content);
+  };
+
+  const handleCancelEditAnswer = () => {
+    setEditingAnswerId(null);
+    setEditAnswerContent('');
+  };
+
+  const handleSaveAnswer = async (answerId: string) => {
+    if (!editAnswerContent.trim()) {
+      alert('답변 내용을 입력해주세요.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await updateAnswer(answerId, editAnswerContent);
+      await loadAnswers(question!.id);
+      setEditingAnswerId(null);
+      setEditAnswerContent('');
+      alert('답변이 수정되었습니다.');
+    } catch (error) {
+      alert('답변 수정 중 오류가 발생했습니다.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteAnswer = async (answerId: string) => {
+    if (!confirm('답변을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await deleteAnswer(answerId);
+      await loadAnswers(question!.id);
+      alert('답변이 삭제되었습니다.');
+    } catch (error) {
+      alert('답변 삭제 중 오류가 발생했습니다.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (isLoadingQuestion) {
     return (
       <div className="min-h-screen bg-gray-50 py-12 flex items-center justify-center">
@@ -242,27 +351,76 @@ export default function QuestionDetailPage() {
             )}
           </div>
 
-          <h1 className="text-3xl font-bold mb-4">{question.title}</h1>
+          {isEditingQuestion ? (
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  제목
+                </label>
+                <input
+                  type="text"
+                  value={editQuestionTitle}
+                  onChange={(e) => setEditQuestionTitle(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="질문 제목"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  내용
+                </label>
+                <textarea
+                  value={editQuestionContent}
+                  onChange={(e) => setEditQuestionContent(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  rows={8}
+                  placeholder="질문 내용"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSaveQuestion}
+                  disabled={isSubmitting}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold flex items-center gap-2 disabled:bg-gray-400"
+                >
+                  <Check className="w-4 h-4" />
+                  저장
+                </button>
+                <button
+                  onClick={handleCancelEditQuestion}
+                  disabled={isSubmitting}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition font-semibold flex items-center gap-2 disabled:bg-gray-400"
+                >
+                  <X className="w-4 h-4" />
+                  취소
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <h1 className="text-3xl font-bold mb-4">{question.title}</h1>
 
-          <div className="flex items-center gap-4 text-sm text-gray-600 mb-6">
-            <span>{question.author_nickname}</span>
-            <span className="flex items-center gap-1">
-              <Clock className="w-4 h-4" />
-              {timeAgo}
-            </span>
-            <span className="flex items-center gap-1">
-              <Eye className="w-4 h-4" />
-              {question.views}
-            </span>
-            <span className="flex items-center gap-1 text-yellow-600 font-semibold">
-              <Coins className="w-5 h-5" />
-              {question.coins_reward}
-            </span>
-          </div>
+              <div className="flex items-center gap-4 text-sm text-gray-600 mb-6">
+                <span>{question.author_nickname}</span>
+                <span className="flex items-center gap-1">
+                  <Clock className="w-4 h-4" />
+                  {timeAgo}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Eye className="w-4 h-4" />
+                  {question.views}
+                </span>
+                <span className="flex items-center gap-1 text-yellow-600 font-semibold">
+                  <Coins className="w-5 h-5" />
+                  {question.coins_reward}
+                </span>
+              </div>
 
-          <div className="prose max-w-none mb-6">
-            <p className="whitespace-pre-wrap text-gray-700">{question.content}</p>
-          </div>
+              <div className="prose max-w-none mb-6">
+                <p className="whitespace-pre-wrap text-gray-700">{question.content}</p>
+              </div>
+            </>
+          )}
 
           {question.image_urls && question.image_urls.length > 0 && (
             <div className="grid grid-cols-2 gap-4 mb-6">
@@ -274,6 +432,26 @@ export default function QuestionDetailPage() {
                   className="rounded-lg border border-gray-200"
                 />
               ))}
+            </div>
+          )}
+
+          {/* Edit/Delete Buttons for Author */}
+          {user && user.id === question.author_id && !isEditingQuestion && (
+            <div className="flex justify-end gap-2 pt-4 border-t border-gray-200">
+              <button
+                onClick={handleStartEditQuestion}
+                className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+              >
+                <Edit className="w-4 h-4" />
+                수정하기
+              </button>
+              <button
+                onClick={handleDeleteQuestion}
+                className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+              >
+                <Trash2 className="w-4 h-4" />
+                삭제하기
+              </button>
             </div>
           )}
 
@@ -319,6 +497,13 @@ export default function QuestionDetailPage() {
                   onUpvote={() => handleUpvote(answer.id)}
                   onReport={() => handleReportAnswer(answer)}
                   currentUserId={user?.id}
+                  isEditing={editingAnswerId === answer.id}
+                  editContent={editAnswerContent}
+                  onStartEdit={() => handleStartEditAnswer(answer)}
+                  onSaveEdit={() => handleSaveAnswer(answer.id)}
+                  onCancelEdit={handleCancelEditAnswer}
+                  onDelete={() => handleDeleteAnswer(answer.id)}
+                  onEditContentChange={setEditAnswerContent}
                 />
               ))}
             </div>
@@ -391,6 +576,13 @@ function AnswerCard({
   onUpvote,
   onReport,
   currentUserId,
+  isEditing,
+  editContent,
+  onStartEdit,
+  onSaveEdit,
+  onCancelEdit,
+  onDelete,
+  onEditContentChange,
 }: {
   answer: Answer;
   isQuestionAuthor: boolean;
@@ -399,6 +591,13 @@ function AnswerCard({
   onUpvote: () => void;
   onReport: () => void;
   currentUserId?: string;
+  isEditing: boolean;
+  editContent: string;
+  onStartEdit: () => void;
+  onSaveEdit: () => void;
+  onCancelEdit: () => void;
+  onDelete: () => void;
+  onEditContentChange: (content: string) => void;
 }) {
   const timeAgo = getTimeAgo(new Date(answer.created_at));
 
@@ -449,23 +648,74 @@ function AnswerCard({
         </div>
       </div>
 
-      <div className="prose max-w-none">
-        <p className="whitespace-pre-wrap text-gray-700">{answer.content}</p>
-      </div>
+      {isEditing ? (
+        <div className="space-y-4">
+          <textarea
+            value={editContent}
+            onChange={(e) => onEditContentChange(e.target.value)}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+            rows={6}
+            placeholder="답변 내용"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={onSaveEdit}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold flex items-center gap-2"
+            >
+              <Check className="w-4 h-4" />
+              저장
+            </button>
+            <button
+              onClick={onCancelEdit}
+              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition font-semibold flex items-center gap-2"
+            >
+              <X className="w-4 h-4" />
+              취소
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="prose max-w-none">
+            <p className="whitespace-pre-wrap text-gray-700">{answer.content}</p>
+          </div>
 
-      {answer.image_urls && answer.image_urls.length > 0 && (
-        <div className="grid grid-cols-2 gap-4 mt-4">
-          {answer.image_urls.map((url, index) => (
-            <img
-              key={index}
-              src={url}
-              alt={`Answer image ${index + 1}`}
-              className="rounded-lg border border-gray-200"
-            />
-          ))}
+          {answer.image_urls && answer.image_urls.length > 0 && (
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              {answer.image_urls.map((url, index) => (
+                <img
+                  key={index}
+                  src={url}
+                  alt={`Answer image ${index + 1}`}
+                  className="rounded-lg border border-gray-200"
+                />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Edit/Delete Buttons for Answer Author */}
+      {currentUserId && currentUserId === answer.author_id && !isEditing && (
+        <div className="flex justify-end gap-2 pt-4 mt-4 border-t border-gray-200">
+          <button
+            onClick={onStartEdit}
+            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+          >
+            <Edit className="w-4 h-4" />
+            수정하기
+          </button>
+          <button
+            onClick={onDelete}
+            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+          >
+            <Trash2 className="w-4 h-4" />
+            삭제하기
+          </button>
         </div>
       )}
 
+      {/* Report Button for Others */}
       {currentUserId && currentUserId !== answer.author_id && (
         <div className="flex justify-end pt-4 mt-4 border-t border-gray-200">
           <button
