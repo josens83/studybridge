@@ -157,3 +157,113 @@ export interface Notification {
   is_read: boolean;
   created_at: string;
 }
+
+// 대화방 타입
+export type ConversationType = 'direct' | 'group' | 'tutoring';
+
+export interface Conversation {
+  id: string;
+  type: ConversationType;
+  title?: string;
+  created_by?: string;
+  question_id?: string;
+  tutoring_session_id?: string;
+  last_message_at?: string;
+  last_message_preview?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// 대화 참여자 타입
+export interface ConversationParticipant {
+  id: string;
+  conversation_id: string;
+  user_id: string;
+  role: 'admin' | 'member';
+  nickname_override?: string;
+  is_muted: boolean;
+  is_pinned: boolean;
+  last_read_at?: string;
+  joined_at: string;
+  left_at?: string;
+}
+
+// 메시지 타입
+export type MessageType = 'text' | 'image' | 'file' | 'system' | 'question_link';
+
+export interface Message {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  content?: string;
+  message_type: MessageType;
+  image_urls: string[];
+  file_url?: string;
+  file_name?: string;
+  file_size?: number;
+  reply_to_id?: string;
+  is_edited: boolean;
+  is_deleted: boolean;
+  deleted_at?: string;
+  metadata: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+// 메시지 + 발신자 정보
+export interface MessageWithSender extends Message {
+  sender: {
+    id: string;
+    nickname: string;
+    avatar_url?: string;
+    role: UserRole;
+  };
+  reply_to?: Message;
+  read_by?: string[];
+}
+
+// 대화방 + 참여자 + 마지막 메시지 정보
+export interface ConversationWithDetails extends Conversation {
+  participants: (ConversationParticipant & {
+    user: {
+      id: string;
+      nickname: string;
+      avatar_url?: string;
+      role: UserRole;
+    };
+  })[];
+  unread_count: number;
+  other_participant?: {
+    id: string;
+    nickname: string;
+    avatar_url?: string;
+    role: UserRole;
+  };
+}
+
+// 사용자 온라인 상태
+export type PresenceStatus = 'online' | 'away' | 'offline';
+
+export interface UserPresence {
+  user_id: string;
+  status: PresenceStatus;
+  last_seen_at: string;
+  current_conversation_id?: string;
+}
+
+// 타이핑 인디케이터
+export interface TypingIndicator {
+  user_id: string;
+  conversation_id: string;
+  is_typing: boolean;
+}
+
+// 메시지 검색 결과
+export interface MessageSearchResult {
+  message_id: string;
+  conversation_id: string;
+  content: string;
+  sender_nickname: string;
+  created_at: string;
+}
