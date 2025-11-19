@@ -23,7 +23,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
     "tailwind-merge": "^2.2.0",
-    "@tosspayments/payment-sdk": "^2.1.0"
+    "@tosspayments/payment-sdk": "^1.9.2"
   },
   "devDependencies": {
     "typescript": "^5",
