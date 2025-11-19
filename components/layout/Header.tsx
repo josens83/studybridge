@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Menu, X, BookOpen, Coins, User, LogOut, Bookmark, Settings } from 'lucide-react';
+import { Menu, X, BookOpen, Coins, User, LogOut, Bookmark, Settings, MessageCircle } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { signOut } from '@/lib/supabase/auth';
 import NotificationBell from '@/components/ui/NotificationBell';
+import MessageBell from '@/components/ui/MessageBell';
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -60,6 +61,7 @@ export default function Header() {
                     <span>{user.coins.toLocaleString()}</span>
                   </Link>
 
+                  <MessageBell />
                   <NotificationBell />
 
                   <div className="relative group">
@@ -77,8 +79,15 @@ export default function Header() {
                         대시보드
                       </Link>
                       <Link
-                        href="/bookmarks"
+                        href="/messages"
                         className="block px-4 py-2 hover:bg-gray-50 transition flex items-center gap-2 text-blue-600"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        메시지
+                      </Link>
+                      <Link
+                        href="/bookmarks"
+                        className="block px-4 py-2 hover:bg-gray-50 transition flex items-center gap-2"
                       >
                         <Bookmark className="w-4 h-4" />
                         북마크
@@ -174,14 +183,24 @@ export default function Header() {
                 내 대시보드
               </Link>
               {user && (
-                <Link
-                  href="/bookmarks"
-                  className="text-gray-700 hover:text-blue-600 transition flex items-center gap-2"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  <Bookmark className="w-4 h-4" />
-                  북마크
-                </Link>
+                <>
+                  <Link
+                    href="/messages"
+                    className="text-gray-700 hover:text-blue-600 transition flex items-center gap-2"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    메시지
+                  </Link>
+                  <Link
+                    href="/bookmarks"
+                    className="text-gray-700 hover:text-blue-600 transition flex items-center gap-2"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    <Bookmark className="w-4 h-4" />
+                    북마크
+                  </Link>
+                </>
               )}
             </div>
           </div>

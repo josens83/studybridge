@@ -1,8 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { Star, Clock, Award, CheckCircle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Star, Clock, Award, CheckCircle, MessageCircle, Loader2 } from 'lucide-react';
 import { SUBJECTS } from '@/lib/utils/constants';
+import { useAuthStore } from '@/lib/store/auth';
+import { getOrCreateDirectConversation } from '@/lib/supabase/chat';
 import type { Tutor } from '@/types';
 
 // Mock data
@@ -52,14 +55,43 @@ const MOCK_TUTORS: Tutor[] = [
 ];
 
 export default function TutoringPage() {
+  const router = useRouter();
+  const { user } = useAuthStore();
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(true);
+  const [loadingTutorId, setLoadingTutorId] = useState<string | null>(null);
 
   const filteredTutors = MOCK_TUTORS.filter((tutor) => {
     if (showOnlyAvailable && !tutor.is_available) return false;
     if (selectedSubject && !tutor.specialties.includes(selectedSubject)) return false;
     return true;
   });
+
+  const handleStartChat = async (tutor: Tutor) => {
+    if (!user) {
+      alert('로그인이 필요합니다.');
+      router.push('/auth');
+      return;
+    }
+
+    setLoadingTutorId(tutor.id);
+
+    try {
+      // Create or get existing conversation
+      const conversationId = await getOrCreateDirectConversation(
+        user.id,
+        tutor.user_id
+      );
+
+      // Navigate to chat room
+      router.push(`/messages/${conversationId}`);
+    } catch (error) {
+      console.error('Error starting chat:', error);
+      alert('대화를 시작할 수 없습니다. 다시 시도해주세요.');
+    } finally {
+      setLoadingTutorId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 py-12">
@@ -132,7 +164,12 @@ export default function TutoringPage() {
         {/* Tutors List */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredTutors.map((tutor) => (
-            <TutorCard key={tutor.id} tutor={tutor} />
+            <TutorCard
+              key={tutor.id}
+              tutor={tutor}
+              onStartChat={() => handleStartChat(tutor)}
+              isLoading={loadingTutorId === tutor.id}
+            />
           ))}
         </div>
 
@@ -164,7 +201,15 @@ function StatCard({
   );
 }
 
-function TutorCard({ tutor }: { tutor: Tutor }) {
+function TutorCard({
+  tutor,
+  onStartChat,
+  isLoading,
+}: {
+  tutor: Tutor;
+  onStartChat: () => void;
+  isLoading: boolean;
+}) {
   return (
     <div className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition">
       <div className="flex items-start justify-between mb-4">
@@ -217,10 +262,23 @@ function TutorCard({ tutor }: { tutor: Tutor }) {
       </div>
 
       <button
-        disabled={!tutor.is_available}
-        className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed"
+        onClick={onStartChat}
+        disabled={!tutor.is_available || isLoading}
+        className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
-        {tutor.is_available ? '매칭 요청' : '현재 불가능'}
+        {isLoading ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            연결 중...
+          </>
+        ) : tutor.is_available ? (
+          <>
+            <MessageCircle className="w-4 h-4" />
+            대화하기
+          </>
+        ) : (
+          '현재 불가능'
+        )}
       </button>
     </div>
   );
