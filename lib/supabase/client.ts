@@ -1,9 +1,13 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Lazy initialization for client-side Supabase client
-let _supabase: SupabaseClient | null = null;
+// Use 'any' for database schema since we don't have generated types
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Database = any;
 
-export const getSupabase = () => {
+// Lazy initialization for client-side Supabase client
+let _supabase: SupabaseClient<Database> | null = null;
+
+export const getSupabase = (): SupabaseClient<Database> => {
   if (!_supabase) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -14,23 +18,23 @@ export const getSupabase = () => {
       );
     }
 
-    _supabase = createClient(supabaseUrl, supabaseAnonKey);
+    _supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
   }
 
   return _supabase;
 };
 
 // For backward compatibility - this will be a getter that returns the lazy-initialized client
-export const supabase = new Proxy({} as SupabaseClient, {
+export const supabase = new Proxy({} as SupabaseClient<Database>, {
   get(_, prop) {
     return (getSupabase() as Record<string | symbol, unknown>)[prop];
   },
 });
 
 // Server-side admin client (lazy initialization to avoid client-side errors)
-let _supabaseAdmin: ReturnType<typeof createClient> | null = null;
+let _supabaseAdmin: SupabaseClient<Database> | null = null;
 
-export const getSupabaseAdmin = () => {
+export const getSupabaseAdmin = (): SupabaseClient<Database> => {
   if (typeof window !== 'undefined') {
     throw new Error('supabaseAdmin should only be used on the server side');
   }
@@ -41,7 +45,7 @@ export const getSupabaseAdmin = () => {
       throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY environment variable');
     }
 
-    _supabaseAdmin = createClient(
+    _supabaseAdmin = createClient<Database>(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       serviceRoleKey,
       {
