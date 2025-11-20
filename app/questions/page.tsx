@@ -82,7 +82,7 @@ export default function QuestionsPage() {
           </form>
           {searchTerm && (
             <p className="mt-3 text-sm text-gray-600">
-              '<span className="font-semibold text-blue-600">{searchTerm}</span>' 검색 결과
+              &apos;<span className="font-semibold text-blue-600">{searchTerm}</span>&apos; 검색 결과
             </p>
           )}
         </div>

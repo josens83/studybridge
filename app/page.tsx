@@ -360,7 +360,7 @@ function TestimonialCard({
           <Star key={i} className="w-5 h-5 fill-yellow-400 text-yellow-400" />
         ))}
       </div>
-      <p className="text-gray-700 mb-6 leading-relaxed italic">"{content}"</p>
+      <p className="text-gray-700 mb-6 leading-relaxed italic">&ldquo;{content}&rdquo;</p>
       <div className="flex items-center gap-3">
         <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
           {name[0]}
