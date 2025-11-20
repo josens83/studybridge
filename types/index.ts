@@ -13,9 +13,9 @@ export interface User {
   subscription_expires_at?: string;
   created_at: string;
   is_anonymous: boolean;
-  bio?: string;
-  grade_level?: string;
-  subjects_of_interest?: string[];
+  bio?: string | null;
+  grade_level?: string | null;
+  subjects_of_interest?: string[] | null;
 }
 
 // 구독 타입
