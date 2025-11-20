@@ -4,40 +4,29 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 /* eslint-disable-next-line */
 type Database = any;
 
-// Lazy initialization for client-side Supabase client
-let _supabase: SupabaseClient<Database> | null = null;
+// Get environment variables
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-export const getSupabase = (): SupabaseClient<Database> => {
-  if (!_supabase) {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    console.log('Initializing Supabase client...', {
-      hasUrl: !!supabaseUrl,
-      hasKey: !!supabaseAnonKey,
-      urlPrefix: supabaseUrl?.substring(0, 20)
-    });
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      throw new Error(
-        'Missing Supabase environment variables. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY'
-      );
-    }
-
-    _supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
-    console.log('Supabase client initialized successfully');
-  }
-
-  return _supabase;
-};
-
-// For backward compatibility - this will be a getter that returns the lazy-initialized client
-export const supabase = new Proxy({} as SupabaseClient<Database>, {
-  get(_, prop) {
-    /* eslint-disable-next-line */
-    return (getSupabase() as any)[prop];
-  },
+console.log('Supabase client module loading...', {
+  hasUrl: !!supabaseUrl,
+  hasKey: !!supabaseAnonKey,
+  urlPrefix: supabaseUrl?.substring(0, 20)
 });
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    'Missing Supabase environment variables. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY'
+  );
+}
+
+// Create the client immediately - no lazy initialization
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+
+// Helper function for compatibility
+export const getSupabase = (): SupabaseClient<Database> => supabase;
+
+console.log('Supabase client created successfully');
 
 // Server-side admin client (lazy initialization to avoid client-side errors)
 let _supabaseAdmin: SupabaseClient<Database> | null = null;
