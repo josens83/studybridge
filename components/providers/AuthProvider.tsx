@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/lib/store/auth';
 import { getCurrentUser } from '@/lib/supabase/auth';
-import { supabase } from '@/lib/supabase/client';
+import { getSupabase } from '@/lib/supabase/client';
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const { setUser } = useAuthStore();
@@ -14,6 +14,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     checkUser();
 
     // Listen for auth changes
+    const supabase = getSupabase();
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -47,6 +48,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   const loadUserProfile = async (userId: string) => {
     try {
+      const supabase = getSupabase();
       const { data } = await supabase
         .from('users')
         .select()
