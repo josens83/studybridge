@@ -16,18 +16,18 @@ export default function TermsPage() {
           <div className="space-y-8">
             <Section title="제1조 (목적)">
               <p>
-                본 약관은 StudyBridge(이하 "회사")가 운영하는 StudyBridge 서비스(이하 "서비스")의 이용과 관련하여
+                본 약관은 StudyBridge(이하 &ldquo;회사&rdquo;)가 운영하는 StudyBridge 서비스(이하 &ldquo;서비스&rdquo;)의 이용과 관련하여
                 회사와 이용자의 권리, 의무 및 책임사항을 규정함을 목적으로 합니다.
               </p>
             </Section>
 
             <Section title="제2조 (용어의 정의)">
               <ul className="list-disc list-inside space-y-2">
-                <li>"서비스"라 함은 StudyBridge가 제공하는 질문/답변 플랫폼 및 관련 서비스 일체를 의미합니다.</li>
-                <li>"이용자"라 함은 본 약관에 따라 회사가 제공하는 서비스를 받는 회원 및 비회원을 말합니다.</li>
-                <li>"회원"이라 함은 회사와 서비스 이용계약을 체결하고 이용자 ID를 부여받은 자를 의미합니다.</li>
-                <li>"코인"이라 함은 서비스 내에서 사용되는 가상 화폐를 의미합니다.</li>
-                <li>"포인트"라 함은 활동 보상으로 지급되는 가상 포인트를 의미합니다.</li>
+                <li>&ldquo;서비스&rdquo;라 함은 StudyBridge가 제공하는 질문/답변 플랫폼 및 관련 서비스 일체를 의미합니다.</li>
+                <li>&ldquo;이용자&rdquo;라 함은 본 약관에 따라 회사가 제공하는 서비스를 받는 회원 및 비회원을 말합니다.</li>
+                <li>&ldquo;회원&rdquo;이라 함은 회사와 서비스 이용계약을 체결하고 이용자 ID를 부여받은 자를 의미합니다.</li>
+                <li>&ldquo;코인&rdquo;이라 함은 서비스 내에서 사용되는 가상 화폐를 의미합니다.</li>
+                <li>&ldquo;포인트&rdquo;라 함은 활동 보상으로 지급되는 가상 포인트를 의미합니다.</li>
               </ul>
             </Section>
 
