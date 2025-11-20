@@ -362,7 +362,7 @@ export default function ProfileSettingsPage() {
                   <span className="text-gray-600">구독 상태</span>
                   <p className="font-semibold mt-1">
                     {user.subscription_tier === 'premium' ? '프리미엄' :
-                     user.subscription_tier === 'basic' ? '베이직' : '무료'}
+                     user.subscription_tier === 'premium_plus' ? '프리미엄 플러스' : '무료'}
                   </p>
                 </div>
                 <div>
