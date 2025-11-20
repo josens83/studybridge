@@ -135,7 +135,7 @@ export default function TutoringPage() {
               <label className="text-sm font-semibold mb-2 block">과목</label>
               <select
                 value={selectedSubject}
-                onChange={(e) => setSelectedSubject(e.target.value)}
+                onChange={(e) => setSelectedSubject(e.target.value as Subject | '')}
                 className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">전체</option>
