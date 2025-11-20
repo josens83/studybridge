@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Use 'any' for database schema since we don't have generated types
+// Database type - using 'any' since we don't have generated types from Supabase
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Database = any;
 
