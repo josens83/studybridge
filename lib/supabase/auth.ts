@@ -114,8 +114,15 @@ export async function signOut() {
 // Get current user
 export async function getCurrentUser() {
   try {
+    console.log('getCurrentUser: Starting...');
+    console.log('getCurrentUser: supabase object:', typeof supabase);
+    console.log('getCurrentUser: supabase.auth:', typeof supabase.auth);
+
     // First check if we have a session
+    console.log('getCurrentUser: Calling getSession...');
     const { data: { session } } = await supabase.auth.getSession();
+    console.log('getCurrentUser: getSession completed, session:', !!session);
+
     if (!session) {
       return null;
     }
