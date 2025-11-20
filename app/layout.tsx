@@ -4,6 +4,7 @@ import './globals.css';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import AuthProvider from '@/components/providers/AuthProvider';
+import RealtimeProvider from '@/components/providers/RealtimeProvider';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -63,13 +64,15 @@ export default function RootLayout({
     <html lang="ko">
       <body className={inter.className}>
         <AuthProvider>
-          <div className="flex flex-col min-h-screen">
-            <Header />
-            <main className="flex-1">
-              {children}
-            </main>
-            <Footer />
-          </div>
+          <RealtimeProvider>
+            <div className="flex flex-col min-h-screen">
+              <Header />
+              <main className="flex-1">
+                {children}
+              </main>
+              <Footer />
+            </div>
+          </RealtimeProvider>
         </AuthProvider>
       </body>
     </html>
