@@ -473,7 +473,7 @@ function TransactionItem({
   amount,
   date,
 }: {
-  type: 'earn' | 'spend' | 'purchase';
+  type: 'earn' | 'spend' | 'purchase' | 'reward';
   description: string;
   amount: string;
   date: string;
