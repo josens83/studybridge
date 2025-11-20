@@ -4,8 +4,8 @@ export interface ProfileUpdate {
   nickname?: string;
   bio?: string;
   avatar_url?: string;
-  grade_level?: string;
-  subjects_of_interest?: string[];
+  grade_level?: string | null;
+  subjects_of_interest?: string[] | null;
 }
 
 /**
