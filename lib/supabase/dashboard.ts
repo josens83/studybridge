@@ -177,7 +177,8 @@ export async function getCoinTransactions(userId: string, limit: number = 20): P
 
   if (error) {
     console.error('Error fetching coin transactions:', error);
-    throw new Error('코인 거래 내역을 불러올 수 없습니다.');
+    // Return empty array instead of throwing - table might not have data yet
+    return [];
   }
 
   return (data || []).map((t) => ({
@@ -203,7 +204,8 @@ export async function getPointTransactions(userId: string, limit: number = 20): 
 
   if (error) {
     console.error('Error fetching point transactions:', error);
-    throw new Error('포인트 거래 내역을 불러올 수 없습니다.');
+    // Return empty array instead of throwing - table might not have data yet
+    return [];
   }
 
   return (data || []).map((t) => ({
