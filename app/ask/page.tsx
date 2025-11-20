@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { Upload, X, Coins, AlertCircle, Loader2 } from 'lucide-react';
 import { SUBJECTS, GRADE_LEVELS, QUESTION_COIN_COST } from '@/lib/utils/constants';
 import { useAuthStore } from '@/lib/store/auth';
@@ -242,11 +243,15 @@ export default function AskQuestionPage() {
                 <div className="grid grid-cols-5 gap-2 mt-4">
                   {previews.map((preview, index) => (
                     <div key={index} className="relative group">
-                      <img
-                        src={preview}
-                        alt={`Upload ${index + 1}`}
-                        className="w-full h-20 object-cover rounded"
-                      />
+                      <div className="relative w-full h-20 rounded overflow-hidden">
+                        <Image
+                          src={preview}
+                          alt={`Upload ${index + 1}`}
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
+                      </div>
                       {!isSubmitting && (
                         <button
                           type="button"

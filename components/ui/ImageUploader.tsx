@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { Upload, X, Loader2 } from 'lucide-react';
 import { uploadImages } from '@/lib/supabase/storage';
 
@@ -93,11 +94,15 @@ export default function ImageUploader({
         <div className="grid grid-cols-5 gap-2 mt-4">
           {previews.map((preview, index) => (
             <div key={index} className="relative group">
-              <img
-                src={preview}
-                alt={`Preview ${index + 1}`}
-                className="w-full h-20 object-cover rounded"
-              />
+              <div className="relative w-full h-20 rounded overflow-hidden">
+                <Image
+                  src={preview}
+                  alt={`Preview ${index + 1}`}
+                  fill
+                  className="object-cover"
+                  unoptimized
+                />
+              </div>
               <button
                 type="button"
                 onClick={() => removeImage(index)}

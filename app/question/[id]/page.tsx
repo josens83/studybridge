@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import NextImage from 'next/image';
 import { Clock, Eye, Coins, ThumbsUp, Award, AlertCircle, Loader2, ImageIcon, Flag, Edit, Trash2, X, Check, Bookmark } from 'lucide-react';
 import type { Question, Answer } from '@/types';
 import { getQuestionById, updateQuestion, deleteQuestion } from '@/lib/supabase/questions';
@@ -483,12 +484,16 @@ export default function QuestionDetailPage() {
           {question.image_urls && question.image_urls.length > 0 && (
             <div className="grid grid-cols-2 gap-4 mb-6">
               {question.image_urls.map((url, index) => (
-                <img
-                  key={index}
-                  src={url}
-                  alt={`Question image ${index + 1}`}
-                  className="rounded-lg border border-gray-200"
-                />
+                <div key={index} className="relative w-full rounded-lg border border-gray-200 overflow-hidden">
+                  <NextImage
+                    src={url}
+                    alt={`Question image ${index + 1}`}
+                    width={400}
+                    height={300}
+                    className="rounded-lg"
+                    style={{ width: '100%', height: 'auto' }}
+                  />
+                </div>
               ))}
             </div>
           )}
@@ -741,12 +746,16 @@ function AnswerCard({
           {answer.image_urls && answer.image_urls.length > 0 && (
             <div className="grid grid-cols-2 gap-4 mt-4">
               {answer.image_urls.map((url, index) => (
-                <img
-                  key={index}
-                  src={url}
-                  alt={`Answer image ${index + 1}`}
-                  className="rounded-lg border border-gray-200"
-                />
+                <div key={index} className="relative w-full rounded-lg border border-gray-200 overflow-hidden">
+                  <NextImage
+                    src={url}
+                    alt={`Answer image ${index + 1}`}
+                    width={400}
+                    height={300}
+                    className="rounded-lg"
+                    style={{ width: '100%', height: 'auto' }}
+                  />
+                </div>
               ))}
             </div>
           )}

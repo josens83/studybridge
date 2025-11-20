@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import NextImage from 'next/image';
 import {
   ArrowLeft,
   Send,
@@ -386,12 +387,16 @@ export default function ChatRoomPage() {
                       {message.image_urls && message.image_urls.length > 0 && (
                         <div className="mb-1 space-y-1">
                           {message.image_urls.map((url, i) => (
-                            <img
-                              key={i}
-                              src={url}
-                              alt="Attached"
-                              className="max-w-full rounded-lg"
-                            />
+                            <div key={i} className="relative max-w-full rounded-lg overflow-hidden">
+                              <NextImage
+                                src={url}
+                                alt="Attached"
+                                width={400}
+                                height={300}
+                                className="rounded-lg"
+                                style={{ maxWidth: '100%', height: 'auto' }}
+                              />
+                            </div>
                           ))}
                         </div>
                       )}
@@ -538,11 +543,15 @@ export default function ChatRoomPage() {
           <div className="flex gap-2 overflow-x-auto">
             {selectedImages.map((file, index) => (
               <div key={index} className="relative flex-shrink-0">
-                <img
-                  src={URL.createObjectURL(file)}
-                  alt="Preview"
-                  className="w-16 h-16 object-cover rounded-lg"
-                />
+                <div className="relative w-16 h-16 rounded-lg overflow-hidden">
+                  <NextImage
+                    src={URL.createObjectURL(file)}
+                    alt="Preview"
+                    fill
+                    className="object-cover"
+                    unoptimized
+                  />
+                </div>
                 <button
                   onClick={() =>
                     setSelectedImages(selectedImages.filter((_, i) => i !== index))
