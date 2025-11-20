@@ -46,7 +46,7 @@ const MOCK_TUTORS: Tutor[] = [
     verification_status: 'verified',
     rating: 4.7,
     total_sessions: 89,
-    specialties: ['과학', '화학'],
+    specialties: ['과학'],
     hourly_rate: 28000,
     is_available: false,
     bio: '화학 전문 튜터입니다. 개념부터 실전 문제풀이까지 체계적으로 지도합니다.',
