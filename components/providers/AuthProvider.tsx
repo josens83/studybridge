@@ -1,16 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useAuthStore } from '@/lib/store/auth';
 import { getCurrentUser } from '@/lib/supabase/auth';
 import { getSupabase } from '@/lib/supabase/client';
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const { setUser } = useAuthStore();
-  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check active session
+    // Check active session in background - don't block rendering
     checkUser();
 
     // Listen for auth changes
@@ -32,7 +31,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   const checkUser = async () => {
     try {
-      console.log('Checking user session...');
+      console.log('Checking user session in background...');
       const result = await getCurrentUser();
       console.log('User check result:', result);
       if (result) {
@@ -40,9 +39,6 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       }
     } catch (error) {
       console.error('Error checking user:', error);
-    } finally {
-      console.log('Setting isLoading to false');
-      setIsLoading(false);
     }
   };
 
@@ -63,13 +59,6 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
+  // No loading screen - render immediately
   return <>{children}</>;
 }
