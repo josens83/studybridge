@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase/client';
+import { getSupabaseAdmin } from '@/lib/supabase/client';
 
 // POST /api/payments - Process payment
 export async function POST(request: NextRequest) {
   try {
+    const supabaseAdmin = getSupabaseAdmin();
     const body = await request.json();
     const { user_id, type, amount, payment_method, order_id } = body;
 

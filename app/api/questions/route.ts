@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase/client';
+import { getSupabaseAdmin } from '@/lib/supabase/client';
 
 // GET /api/questions - Get all questions
 export async function GET(request: NextRequest) {
   try {
+    const supabaseAdmin = getSupabaseAdmin();
     const { searchParams } = new URL(request.url);
     const subject = searchParams.get('subject');
     const limit = parseInt(searchParams.get('limit') || '20');
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest) {
 // POST /api/questions - Create a new question
 export async function POST(request: NextRequest) {
   try {
+    const supabaseAdmin = getSupabaseAdmin();
     const body = await request.json();
     const {
       author_id,
