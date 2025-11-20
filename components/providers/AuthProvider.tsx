@@ -31,13 +31,16 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   const checkUser = async () => {
     try {
+      console.log('Checking user session...');
       const result = await getCurrentUser();
+      console.log('User check result:', result);
       if (result) {
         setUser(result.profile);
       }
     } catch (error) {
       console.error('Error checking user:', error);
     } finally {
+      console.log('Setting isLoading to false');
       setIsLoading(false);
     }
   };
