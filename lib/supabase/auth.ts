@@ -113,21 +113,32 @@ export async function signOut() {
 
 // Get current user
 export async function getCurrentUser() {
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  try {
+    // First check if we have a session
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      return null;
+    }
 
-  if (authError) throw authError;
-  if (!user) return null;
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-  // Get user profile
-  const { data: userData, error: userError } = await supabase
-    .from('users')
-    .select()
-    .eq('id', user.id)
-    .single();
+    if (authError) throw authError;
+    if (!user) return null;
 
-  if (userError) throw userError;
+    // Get user profile
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select()
+      .eq('id', user.id)
+      .single();
 
-  return { user, profile: userData };
+    if (userError) throw userError;
+
+    return { user, profile: userData };
+  } catch (error) {
+    console.error('Error in getCurrentUser:', error);
+    return null;
+  }
 }
 
 // Get user profile by ID
