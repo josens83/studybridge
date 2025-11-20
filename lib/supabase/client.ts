@@ -27,7 +27,8 @@ export const getSupabase = (): SupabaseClient<Database> => {
 // For backward compatibility - this will be a getter that returns the lazy-initialized client
 export const supabase = new Proxy({} as SupabaseClient<Database>, {
   get(_, prop) {
-    return (getSupabase() as Record<string | symbol, unknown>)[prop];
+    /* eslint-disable-next-line */
+    return (getSupabase() as any)[prop];
   },
 });
 
