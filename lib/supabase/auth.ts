@@ -139,14 +139,32 @@ export async function getCurrentUser() {
     if (authError) throw authError;
     if (!user) return null;
 
-    // Get user profile
+    // Get user profile - but don't fail if it doesn't exist
     const { data: userData, error: userError } = await supabase
       .from('users')
       .select()
       .eq('id', user.id)
       .single();
 
-    if (userError) throw userError;
+    // If profile doesn't exist, create a basic one from auth user
+    if (userError || !userData) {
+      console.log('User profile not found, creating basic profile from auth user');
+
+      // Return a basic profile structure
+      const basicProfile = {
+        id: user.id,
+        email: user.email,
+        nickname: user.email?.split('@')[0] || `User${user.id.substring(0, 4)}`,
+        is_anonymous: !user.email,
+        coins: 0,
+        points: 0,
+        subscription_tier: 'free' as const,
+        created_at: user.created_at,
+        updated_at: new Date().toISOString(),
+      };
+
+      return { user, profile: basicProfile };
+    }
 
     return { user, profile: userData };
   } catch (error) {
