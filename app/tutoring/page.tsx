@@ -6,7 +6,7 @@ import { Star, Clock, Award, CheckCircle, MessageCircle, Loader2 } from 'lucide-
 import { SUBJECTS } from '@/lib/utils/constants';
 import { useAuthStore } from '@/lib/store/auth';
 import { getOrCreateDirectConversation } from '@/lib/supabase/chat';
-import type { Tutor } from '@/types';
+import type { Tutor, Subject } from '@/types';
 
 // Mock data
 const MOCK_TUTORS: Tutor[] = [
@@ -57,13 +57,13 @@ const MOCK_TUTORS: Tutor[] = [
 export default function TutoringPage() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const [selectedSubject, setSelectedSubject] = useState<string>('');
+  const [selectedSubject, setSelectedSubject] = useState<Subject | ''>('');
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(true);
   const [loadingTutorId, setLoadingTutorId] = useState<string | null>(null);
 
   const filteredTutors = MOCK_TUTORS.filter((tutor) => {
     if (showOnlyAvailable && !tutor.is_available) return false;
-    if (selectedSubject && !tutor.specialties.includes(selectedSubject)) return false;
+    if (selectedSubject && !tutor.specialties.includes(selectedSubject as Subject)) return false;
     return true;
   });
 
