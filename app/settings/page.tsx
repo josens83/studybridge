@@ -49,7 +49,7 @@ export default function SettingsPage() {
 
     setProfileData({
       nickname: user.nickname,
-      email: user.email,
+      email: user.email || '',
     });
   }, [user, router]);
 
