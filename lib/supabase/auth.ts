@@ -118,55 +118,77 @@ export async function signOut() {
   if (error) throw error;
 }
 
-// Get current user
+// Get current user with timeout
 export async function getCurrentUser() {
   try {
     console.log('getCurrentUser: Starting...');
-    const supabase = getSupabase();
-    console.log('getCurrentUser: Got supabase instance');
 
-    // First check if we have a session
-    console.log('getCurrentUser: Calling getSession...');
-    const { data: { session } } = await supabase.auth.getSession();
-    console.log('getCurrentUser: getSession completed, session:', !!session);
+    // Create a promise that times out after 5 seconds
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('getCurrentUser timeout after 5s')), 5000);
+    });
 
-    if (!session) {
-      return null;
-    }
+    const getUserPromise = (async () => {
+      const supabase = getSupabase();
+      console.log('getCurrentUser: Got supabase instance');
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+      // First check if we have a session
+      console.log('getCurrentUser: Calling getSession...');
+      const sessionResult = await supabase.auth.getSession();
+      console.log('getCurrentUser: getSession completed, session:', !!sessionResult.data.session);
 
-    if (authError) throw authError;
-    if (!user) return null;
+      if (!sessionResult.data.session) {
+        console.log('getCurrentUser: No session found, returning null');
+        return null;
+      }
 
-    // Get user profile - but don't fail if it doesn't exist
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select()
-      .eq('id', user.id)
-      .single();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    // If profile doesn't exist, create a basic one from auth user
-    if (userError || !userData) {
-      console.log('User profile not found, creating basic profile from auth user');
+      if (authError) {
+        console.error('getCurrentUser: authError:', authError);
+        throw authError;
+      }
+      if (!user) {
+        console.log('getCurrentUser: No user found, returning null');
+        return null;
+      }
 
-      // Return a basic profile structure
-      const basicProfile = {
-        id: user.id,
-        email: user.email,
-        nickname: user.email?.split('@')[0] || `User${user.id.substring(0, 4)}`,
-        is_anonymous: !user.email,
-        coins: 0,
-        points: 0,
-        subscription_tier: 'free' as const,
-        created_at: user.created_at,
-        updated_at: new Date().toISOString(),
-      };
+      console.log('getCurrentUser: User found, fetching profile...');
 
-      return { user, profile: basicProfile };
-    }
+      // Get user profile - but don't fail if it doesn't exist
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select()
+        .eq('id', user.id)
+        .single();
 
-    return { user, profile: userData };
+      // If profile doesn't exist, create a basic one from auth user
+      if (userError || !userData) {
+        console.log('User profile not found, creating basic profile from auth user');
+
+        // Return a basic profile structure
+        const basicProfile = {
+          id: user.id,
+          email: user.email,
+          nickname: user.email?.split('@')[0] || `User${user.id.substring(0, 4)}`,
+          is_anonymous: !user.email,
+          coins: 0,
+          points: 0,
+          subscription_tier: 'free' as const,
+          created_at: user.created_at,
+          updated_at: new Date().toISOString(),
+        };
+
+        return { user, profile: basicProfile };
+      }
+
+      console.log('getCurrentUser: Profile found, returning user data');
+      return { user, profile: userData };
+    })();
+
+    // Race between the actual call and the timeout
+    const result = await Promise.race([getUserPromise, timeoutPromise]);
+    return result as Awaited<typeof getUserPromise>;
   } catch (error) {
     console.error('Error in getCurrentUser:', error);
     return null;
