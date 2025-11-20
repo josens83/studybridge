@@ -1,4 +1,4 @@
-import { supabase } from './client';
+import { getSupabase } from './client';
 
 export interface SignUpData {
   email: string;
@@ -13,6 +13,8 @@ export interface SignInData {
 
 // Sign up with email
 export async function signUp({ email, password, nickname }: SignUpData) {
+  const supabase = getSupabase();
+
   // Create auth user
   const { data: authData, error: authError } = await supabase.auth.signUp({
     email,
@@ -43,6 +45,8 @@ export async function signUp({ email, password, nickname }: SignUpData) {
 
 // Sign in with email
 export async function signIn({ email, password }: SignInData) {
+  const supabase = getSupabase();
+
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
@@ -65,6 +69,8 @@ export async function signIn({ email, password }: SignInData) {
 
 // Sign in anonymously
 export async function signInAnonymously() {
+  const supabase = getSupabase();
+
   const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
 
   if (authError) throw authError;
@@ -107,6 +113,7 @@ export async function signInAnonymously() {
 
 // Sign out
 export async function signOut() {
+  const supabase = getSupabase();
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 }
@@ -115,8 +122,8 @@ export async function signOut() {
 export async function getCurrentUser() {
   try {
     console.log('getCurrentUser: Starting...');
-    console.log('getCurrentUser: supabase object:', typeof supabase);
-    console.log('getCurrentUser: supabase.auth:', typeof supabase.auth);
+    const supabase = getSupabase();
+    console.log('getCurrentUser: Got supabase instance');
 
     // First check if we have a session
     console.log('getCurrentUser: Calling getSession...');
@@ -150,6 +157,7 @@ export async function getCurrentUser() {
 
 // Get user profile by ID
 export async function getUserProfile(userId: string) {
+  const supabase = getSupabase();
   const { data, error } = await supabase
     .from('users')
     .select()
@@ -165,6 +173,7 @@ export async function updateUserProfile(userId: string, updates: Partial<{
   nickname: string;
   avatar_url: string;
 }>) {
+  const supabase = getSupabase();
   const { data, error } = await supabase
     .from('users')
     .update(updates)
