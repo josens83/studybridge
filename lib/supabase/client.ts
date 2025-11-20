@@ -1,7 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Database type - using 'any' since we don't have generated types from Supabase
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+/* eslint-disable-next-line */
 type Database = any;
 
 // Lazy initialization for client-side Supabase client
