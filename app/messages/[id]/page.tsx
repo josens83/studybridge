@@ -34,8 +34,10 @@ import {
 } from '@/lib/supabase/chat';
 import { uploadImage } from '@/lib/supabase/storage';
 import type { ConversationWithDetails, MessageWithSender, UserPresence } from '@/types';
+import ErrorBoundary from '@/components/error/ErrorBoundary';
+import { logError } from '@/lib/error-logging';
 
-export default function ChatRoomPage() {
+function ChatRoomPageContent() {
   const params = useParams();
   const router = useRouter();
   const { user } = useAuthStore();
@@ -629,4 +631,27 @@ function getTimeAgo(date: Date): string {
   if (seconds < 3600) return `${Math.floor(seconds / 60)}분 전`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}시간 전`;
   return `${Math.floor(seconds / 86400)}일 전`;
+}
+
+export default function ChatRoomPage() {
+  const params = useParams();
+  const { user } = useAuthStore();
+
+  return (
+    <ErrorBoundary
+      level="page"
+      onError={(error, errorInfo) => {
+        logError(error, errorInfo, {
+          userId: user?.id,
+          severity: 'high',
+          additionalData: {
+            page: 'chat-room',
+            conversationId: params.id,
+          },
+        });
+      }}
+    >
+      <ChatRoomPageContent />
+    </ErrorBoundary>
+  );
 }

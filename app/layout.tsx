@@ -5,6 +5,7 @@ import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import AuthProvider from '@/components/providers/AuthProvider';
 import RealtimeProvider from '@/components/providers/RealtimeProvider';
+import GlobalErrorHandler from '@/components/providers/GlobalErrorHandler';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -65,6 +66,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <AuthProvider>
           <RealtimeProvider>
+            <GlobalErrorHandler />
             <div className="flex flex-col min-h-screen">
               <Header />
               <main className="flex-1">

@@ -8,10 +8,12 @@ import { SUBJECTS, GRADE_LEVELS, QUESTION_COIN_COST } from '@/lib/utils/constant
 import { useAuthStore } from '@/lib/store/auth';
 import { createQuestion } from '@/lib/supabase/questions';
 import { uploadImages } from '@/lib/supabase/storage';
+import ErrorBoundary from '@/components/error/ErrorBoundary';
+import { logError } from '@/lib/error-logging';
 
 type UrgencyLevel = 'normal' | 'important' | 'urgent';
 
-export default function AskQuestionPage() {
+function AskQuestionPageContent() {
   const router = useRouter();
   const { user } = useAuthStore();
   const [title, setTitle] = useState('');
@@ -350,5 +352,24 @@ export default function AskQuestionPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AskQuestionPage() {
+  const { user } = useAuthStore();
+
+  return (
+    <ErrorBoundary
+      level="page"
+      onError={(error, errorInfo) => {
+        logError(error, errorInfo, {
+          userId: user?.id,
+          severity: 'high',
+          additionalData: { page: 'ask' },
+        });
+      }}
+    >
+      <AskQuestionPageContent />
+    </ErrorBoundary>
   );
 }

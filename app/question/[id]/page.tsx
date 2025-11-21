@@ -10,8 +10,10 @@ import { getAnswersByQuestionId, createAnswer, acceptAnswer, upvoteAnswer, updat
 import { useAuthStore } from '@/lib/store/auth';
 import ReportModal from '@/components/ui/ReportModal';
 import { toggleBookmark, isBookmarked } from '@/lib/supabase/bookmarks';
+import ErrorBoundary from '@/components/error/ErrorBoundary';
+import { logError } from '@/lib/error-logging';
 
-export default function QuestionDetailPage() {
+function QuestionDetailPageContent() {
   const params = useParams();
   const router = useRouter();
   const { user } = useAuthStore();
@@ -819,4 +821,27 @@ function getTimeAgo(date: Date): string {
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}시간 전`;
   if (seconds < 604800) return `${Math.floor(seconds / 86400)}일 전`;
   return `${Math.floor(seconds / 604800)}주 전`;
+}
+
+export default function QuestionDetailPage() {
+  const params = useParams();
+  const { user } = useAuthStore();
+
+  return (
+    <ErrorBoundary
+      level="page"
+      onError={(error, errorInfo) => {
+        logError(error, errorInfo, {
+          userId: user?.id,
+          severity: 'high',
+          additionalData: {
+            page: 'question-detail',
+            questionId: params.id,
+          },
+        });
+      }}
+    >
+      <QuestionDetailPageContent />
+    </ErrorBoundary>
+  );
 }
