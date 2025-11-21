@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Menu, X, BookOpen, Coins, User, LogOut, Bookmark, Settings, MessageCircle } from 'lucide-react';
+import { Menu, X, BookOpen, Coins, User, LogOut, Bookmark, Settings, MessageCircle, Trophy } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import { signOut } from '@/lib/supabase/auth';
 import NotificationBell from '@/components/ui/NotificationBell';
@@ -35,6 +35,10 @@ export default function Header() {
           <div className="hidden md:flex items-center gap-6">
             <Link href="/questions" className="text-gray-700 hover:text-blue-600 transition">
               질문 목록
+            </Link>
+            <Link href="/leaderboard" className="flex items-center gap-1 text-gray-700 hover:text-blue-600 transition">
+              <Trophy className="w-4 h-4" />
+              리더보드
             </Link>
             <Link href="/tutoring" className="text-gray-700 hover:text-blue-600 transition">
               튜터 매칭
