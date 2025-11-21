@@ -6,6 +6,7 @@ import Footer from '@/components/layout/Footer';
 import AuthProvider from '@/components/providers/AuthProvider';
 import RealtimeProvider from '@/components/providers/RealtimeProvider';
 import GlobalErrorHandler from '@/components/providers/GlobalErrorHandler';
+import QueryProvider from '@/components/providers/QueryProvider';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -64,18 +65,20 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className={inter.className}>
-        <AuthProvider>
-          <RealtimeProvider>
-            <GlobalErrorHandler />
-            <div className="flex flex-col min-h-screen">
-              <Header />
-              <main className="flex-1">
-                {children}
-              </main>
-              <Footer />
-            </div>
-          </RealtimeProvider>
-        </AuthProvider>
+        <QueryProvider>
+          <AuthProvider>
+            <RealtimeProvider>
+              <GlobalErrorHandler />
+              <div className="flex flex-col min-h-screen">
+                <Header />
+                <main className="flex-1">
+                  {children}
+                </main>
+                <Footer />
+              </div>
+            </RealtimeProvider>
+          </AuthProvider>
+        </QueryProvider>
       </body>
     </html>
   );
