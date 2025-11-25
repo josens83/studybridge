@@ -2,6 +2,7 @@ import imageCompression from 'browser-image-compression';
 import { supabase } from './client';
 
 const BUCKET_NAME = 'question-images';
+const CHAT_FILES_BUCKET = 'chat-files';
 
 // Compress and convert image to WebP
 async function compressImage(file: File): Promise<File> {
@@ -85,6 +86,56 @@ export async function createImageBucket() {
     public: true,
     fileSizeLimit: 5242880, // 5MB
     allowedMimeTypes: ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'],
+  });
+
+  if (error && error.message !== 'Bucket already exists') {
+    throw error;
+  }
+}
+
+// Upload file (for chat attachments)
+export async function uploadFile(file: File, folder: string = 'general'): Promise<string> {
+  const fileExt = file.name.split('.').pop();
+  const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+  const fileName = `${folder}/${Date.now()}_${sanitizedName}`;
+
+  const { data, error } = await supabase.storage
+    .from(CHAT_FILES_BUCKET)
+    .upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: false,
+    });
+
+  if (error) throw error;
+
+  // Get public URL
+  const { data: { publicUrl } } = supabase.storage
+    .from(CHAT_FILES_BUCKET)
+    .getPublicUrl(fileName);
+
+  return publicUrl;
+}
+
+// Delete file
+export async function deleteFile(url: string): Promise<void> {
+  // Extract file path from URL
+  const urlParts = url.split(`${CHAT_FILES_BUCKET}/`);
+  if (urlParts.length < 2) throw new Error('Invalid file URL');
+
+  const filePath = urlParts[1];
+
+  const { error } = await supabase.storage
+    .from(CHAT_FILES_BUCKET)
+    .remove([filePath]);
+
+  if (error) throw error;
+}
+
+// Create chat files bucket (run once during setup)
+export async function createChatFilesBucket() {
+  const { error } = await supabase.storage.createBucket(CHAT_FILES_BUCKET, {
+    public: true,
+    fileSizeLimit: 20971520, // 20MB
   });
 
   if (error && error.message !== 'Bucket already exists') {

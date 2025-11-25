@@ -12,6 +12,10 @@ import {
   MoreVertical,
   User,
   Clock,
+  Plus,
+  Users,
+  X,
+  Check,
 } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import {
@@ -21,8 +25,10 @@ import {
   togglePinConversation,
   searchMessages,
   getUnreadMessageCount,
+  createGroupConversation,
+  searchUsers,
 } from '@/lib/supabase/chat';
-import type { ConversationWithDetails, MessageSearchResult } from '@/types';
+import type { ConversationWithDetails, MessageSearchResult, User as UserType } from '@/types';
 
 export default function MessagesPage() {
   const router = useRouter();
@@ -34,6 +40,15 @@ export default function MessagesPage() {
   const [searchResults, setSearchResults] = useState<MessageSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+
+  // Group chat creation
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [groupTitle, setGroupTitle] = useState('');
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userSearchResults, setUserSearchResults] = useState<Partial<UserType>[]>([]);
+  const [selectedUsers, setSelectedUsers] = useState<Partial<UserType>[]>([]);
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -120,6 +135,27 @@ export default function MessagesPage() {
     return () => clearTimeout(debounce);
   }, [searchQuery]);
 
+  // User search for group creation
+  useEffect(() => {
+    const debounce = setTimeout(async () => {
+      if (userSearchQuery.trim() && user) {
+        setIsSearchingUsers(true);
+        try {
+          const results = await searchUsers(userSearchQuery, user.id);
+          setUserSearchResults(results || []);
+        } catch (error) {
+          console.error('Error searching users:', error);
+        } finally {
+          setIsSearchingUsers(false);
+        }
+      } else {
+        setUserSearchResults([]);
+      }
+    }, 300);
+
+    return () => clearTimeout(debounce);
+  }, [userSearchQuery, user]);
+
   const handleMute = async (conversationId: string) => {
     if (!user) return;
 
@@ -175,6 +211,48 @@ export default function MessagesPage() {
     setActiveDropdown(null);
   };
 
+  // Handle user selection for group
+  const handleSelectUser = (selectedUser: Partial<UserType>) => {
+    if (!selectedUsers.find((u) => u.id === selectedUser.id)) {
+      setSelectedUsers([...selectedUsers, selectedUser]);
+    }
+    setUserSearchQuery('');
+    setUserSearchResults([]);
+  };
+
+  const handleRemoveUser = (userId: string) => {
+    setSelectedUsers(selectedUsers.filter((u) => u.id !== userId));
+  };
+
+  // Create group conversation
+  const handleCreateGroup = async () => {
+    if (!user || !groupTitle.trim() || selectedUsers.length === 0) return;
+
+    setIsCreatingGroup(true);
+    try {
+      const participantIds = selectedUsers.map((u) => u.id!);
+      const conversationId = await createGroupConversation(
+        user.id,
+        groupTitle.trim(),
+        participantIds
+      );
+
+      // Reset modal state
+      setShowGroupModal(false);
+      setGroupTitle('');
+      setSelectedUsers([]);
+      setUserSearchQuery('');
+
+      // Navigate to new conversation
+      router.push(`/messages/${conversationId}`);
+    } catch (error) {
+      console.error('Error creating group:', error);
+      alert('그룹 생성에 실패했습니다.');
+    } finally {
+      setIsCreatingGroup(false);
+    }
+  };
+
   if (!user) {
     return null;
   }
@@ -192,11 +270,147 @@ export default function MessagesPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
+      {/* Group Creation Modal */}
+      {showGroupModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold">그룹 채팅 만들기</h2>
+              <button
+                onClick={() => {
+                  setShowGroupModal(false);
+                  setGroupTitle('');
+                  setSelectedUsers([]);
+                  setUserSearchQuery('');
+                }}
+                className="p-1 hover:bg-gray-100 rounded"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {/* Group Title */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  그룹 이름
+                </label>
+                <input
+                  type="text"
+                  value={groupTitle}
+                  onChange={(e) => setGroupTitle(e.target.value)}
+                  placeholder="그룹 이름을 입력하세요"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Selected Users */}
+              {selectedUsers.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {selectedUsers.map((u) => (
+                    <span
+                      key={u.id}
+                      className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm"
+                    >
+                      {u.nickname}
+                      <button
+                        onClick={() => handleRemoveUser(u.id!)}
+                        className="hover:bg-blue-200 rounded-full p-0.5"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* User Search */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  참여자 추가
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    value={userSearchQuery}
+                    onChange={(e) => setUserSearchQuery(e.target.value)}
+                    placeholder="닉네임으로 검색..."
+                    className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Search Results */}
+                {(userSearchResults.length > 0 || isSearchingUsers) && (
+                  <div className="mt-2 border border-gray-200 rounded-lg max-h-40 overflow-y-auto">
+                    {isSearchingUsers ? (
+                      <div className="p-3 text-center text-gray-500">
+                        <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+                      </div>
+                    ) : (
+                      userSearchResults.map((u) => (
+                        <button
+                          key={u.id}
+                          onClick={() => handleSelectUser(u)}
+                          disabled={selectedUsers.some((s) => s.id === u.id)}
+                          className="w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center gap-3 disabled:opacity-50"
+                        >
+                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            <span className="text-blue-600 font-semibold text-sm">
+                              {u.nickname?.[0]}
+                            </span>
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-medium text-gray-900">{u.nickname}</p>
+                            {u.role === 'tutor' && (
+                              <span className="text-xs text-purple-600">튜터</span>
+                            )}
+                          </div>
+                          {selectedUsers.some((s) => s.id === u.id) && (
+                            <Check className="w-4 h-4 text-blue-600" />
+                          )}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-gray-200 flex justify-end gap-2">
+              <button
+                onClick={() => setShowGroupModal(false)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleCreateGroup}
+                disabled={isCreatingGroup || !groupTitle.trim() || selectedUsers.length === 0}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {isCreatingGroup && <Loader2 className="w-4 h-4 animate-spin" />}
+                만들기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="container mx-auto px-4 max-w-3xl">
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-2">메시지</h1>
-          <p className="text-gray-600">튜터와의 대화를 확인하세요</p>
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">메시지</h1>
+            <p className="text-gray-600">튜터와의 대화를 확인하세요</p>
+          </div>
+          <button
+            onClick={() => setShowGroupModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+          >
+            <Users className="w-5 h-5" />
+            그룹 만들기
+          </button>
         </div>
 
         {/* Search */}
@@ -292,8 +506,12 @@ export default function MessagesPage() {
                       >
                         <div className="flex items-start gap-4">
                           {/* Avatar */}
-                          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                            {conv.other_participant ? (
+                          <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${
+                            conv.type === 'group' ? 'bg-green-100' : 'bg-blue-100'
+                          }`}>
+                            {conv.type === 'group' ? (
+                              <Users className="w-6 h-6 text-green-600" />
+                            ) : conv.other_participant ? (
                               <span className="text-blue-600 font-semibold text-lg">
                                 {conv.other_participant.nickname[0]}
                               </span>
@@ -309,9 +527,16 @@ export default function MessagesPage() {
                                 <Pin className="w-3 h-3 text-blue-600" />
                               )}
                               <h3 className="font-semibold text-gray-900 truncate">
-                                {conv.other_participant?.nickname || conv.title || '대화'}
+                                {conv.type === 'group'
+                                  ? conv.title || '그룹 채팅'
+                                  : conv.other_participant?.nickname || '대화'}
                               </h3>
-                              {conv.other_participant?.role === 'tutor' && (
+                              {conv.type === 'group' && (
+                                <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-semibold">
+                                  {conv.participants.filter(p => !p.left_at).length}명
+                                </span>
+                              )}
+                              {conv.other_participant?.role === 'tutor' && conv.type !== 'group' && (
                                 <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-semibold">
                                   튜터
                                 </span>

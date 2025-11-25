@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import NextImage from 'next/image';
@@ -17,6 +17,12 @@ import {
   Reply,
   X,
   Smile,
+  FileIcon,
+  Download,
+  Copy,
+  ChevronDown,
+  LogOut,
+  Users,
 } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import {
@@ -31,7 +37,9 @@ import {
   subscribeToReadReceipts,
   updatePresence,
   getUserPresence,
+  leaveConversation,
 } from '@/lib/supabase/chat';
+import { uploadFile } from '@/lib/supabase/storage';
 import { uploadImage } from '@/lib/supabase/storage';
 import type { ConversationWithDetails, MessageWithSender, UserPresence } from '@/types';
 import ErrorBoundary from '@/components/error/ErrorBoundary';
@@ -56,8 +64,33 @@ function ChatRoomPageContent() {
   const [editText, setEditText] = useState('');
   const [activeMessageMenu, setActiveMessageMenu] = useState<string | null>(null);
 
+  // 무한 스크롤 관련
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // 새 메시지 알림 배너
+  const [showNewMessageBanner, setShowNewMessageBanner] = useState(false);
+  const [newMessageCount, setNewMessageCount] = useState(0);
+
+  // 이미지 라이트박스
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+
+  // 파일 첨부
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  // 이모지 피커
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  // 헤더 메뉴
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+
+  // 스크롤 위치 추적
+  const [isAtBottom, setIsAtBottom] = useState(true);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const setTypingRef = useRef<((isTyping: boolean) => void) | null>(null);
 
@@ -85,6 +118,16 @@ function ChatRoomPageContent() {
       // Mark as read if not from current user
       if (newMessage.sender_id !== user.id) {
         markMessagesAsRead(conversationId, user.id);
+
+        // 스크롤이 맨 아래가 아니면 새 메시지 배너 표시
+        const container = messagesContainerRef.current;
+        if (container) {
+          const isBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+          if (!isBottom) {
+            setShowNewMessageBanner(true);
+            setNewMessageCount((prev) => prev + 1);
+          }
+        }
       }
     });
 
@@ -121,8 +164,11 @@ function ChatRoomPageContent() {
   }, [user, conversationId, router]);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    // 맨 아래에 있을 때만 자동 스크롤
+    if (isAtBottom) {
+      scrollToBottom();
+    }
+  }, [messages, isAtBottom]);
 
   const loadData = async () => {
     if (!user) return;
@@ -133,11 +179,12 @@ function ChatRoomPageContent() {
       // Load conversation and messages
       const [convData, messagesData] = await Promise.all([
         getConversation(conversationId),
-        getMessages(conversationId),
+        getMessages(conversationId, 50),
       ]);
 
       setConversation(convData);
       setMessages(messagesData);
+      setHasMore(messagesData.length >= 50);
 
       // Mark messages as read
       await markMessagesAsRead(conversationId, user.id);
@@ -153,6 +200,50 @@ function ChatRoomPageContent() {
       setIsLoading(false);
     }
   };
+
+  // 이전 메시지 더 불러오기 (무한 스크롤)
+  const loadMoreMessages = useCallback(async () => {
+    if (!hasMore || isLoadingMore || messages.length === 0) return;
+
+    try {
+      setIsLoadingMore(true);
+      const oldestMessage = messages[0];
+      const olderMessages = await getMessages(conversationId, 50, oldestMessage.created_at);
+
+      if (olderMessages.length < 50) {
+        setHasMore(false);
+      }
+
+      if (olderMessages.length > 0) {
+        setMessages((prev) => [...olderMessages, ...prev]);
+      }
+    } catch (error) {
+      console.error('Error loading more messages:', error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [conversationId, hasMore, isLoadingMore, messages]);
+
+  // 스크롤 이벤트 핸들러
+  const handleScroll = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    // 맨 아래인지 확인
+    const isBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+    setIsAtBottom(isBottom);
+
+    // 새 메시지 배너 숨기기
+    if (isBottom) {
+      setShowNewMessageBanner(false);
+      setNewMessageCount(0);
+    }
+
+    // 맨 위에서 더 불러오기
+    if (container.scrollTop < 100 && hasMore && !isLoadingMore) {
+      loadMoreMessages();
+    }
+  }, [hasMore, isLoadingMore, loadMoreMessages]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -175,7 +266,7 @@ function ChatRoomPageContent() {
   };
 
   const handleSend = async () => {
-    if (!user || (!messageText.trim() && selectedImages.length === 0)) return;
+    if (!user || (!messageText.trim() && selectedImages.length === 0 && !selectedFile)) return;
 
     setIsSending(true);
 
@@ -188,23 +279,46 @@ function ChatRoomPageContent() {
         );
       }
 
+      // Upload file if any
+      let fileUrl: string | undefined;
+      let fileName: string | undefined;
+      let fileSize: number | undefined;
+      if (selectedFile) {
+        fileUrl = await uploadFile(selectedFile, 'chat-files');
+        fileName = selectedFile.name;
+        fileSize = selectedFile.size;
+      }
+
+      // Determine message type
+      let messageType = 'text';
+      if (imageUrls.length > 0) messageType = 'image';
+      else if (fileUrl) messageType = 'file';
+
       // Send message
       await sendMessage({
         conversation_id: conversationId,
         sender_id: user.id,
         content: messageText.trim(),
-        message_type: imageUrls.length > 0 ? 'image' : 'text',
+        message_type: messageType,
         image_urls: imageUrls,
+        file_url: fileUrl,
+        file_name: fileName,
+        file_size: fileSize,
         reply_to_id: replyTo?.id,
       });
 
       // Clear input
       setMessageText('');
       setSelectedImages([]);
+      setSelectedFile(null);
       setReplyTo(null);
 
       // Stop typing indicator
       setTypingRef.current?.(false);
+
+      // Scroll to bottom
+      setIsAtBottom(true);
+      scrollToBottom();
     } catch (error) {
       console.error('Error sending message:', error);
       alert('메시지 전송에 실패했습니다.');
@@ -266,6 +380,81 @@ function ChatRoomPageContent() {
     }
   };
 
+  // 파일 선택 핸들러
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // 파일 크기 제한 (20MB)
+    if (file.size > 20 * 1024 * 1024) {
+      alert('파일 크기는 20MB를 초과할 수 없습니다.');
+      return;
+    }
+
+    setSelectedFile(file);
+  };
+
+  // 메시지 복사 핸들러
+  const handleCopyMessage = async (content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      alert('메시지가 복사되었습니다.');
+    } catch (error) {
+      console.error('Failed to copy message:', error);
+    }
+    setActiveMessageMenu(null);
+  };
+
+  // 대화방 나가기 핸들러
+  const handleLeaveConversation = async () => {
+    if (!user || !confirm('대화방을 나가시겠습니까? 대화 내용은 삭제되지 않습니다.')) return;
+
+    try {
+      await leaveConversation(conversationId, user.id);
+      router.push('/messages');
+    } catch (error) {
+      console.error('Error leaving conversation:', error);
+      alert('대화방을 나가는 중 오류가 발생했습니다.');
+    }
+  };
+
+  // 날짜 구분선 표시 여부 확인
+  const shouldShowDateDivider = (currentMsg: MessageWithSender, prevMsg?: MessageWithSender) => {
+    if (!prevMsg) return true;
+
+    const currentDate = new Date(currentMsg.created_at).toDateString();
+    const prevDate = new Date(prevMsg.created_at).toDateString();
+
+    return currentDate !== prevDate;
+  };
+
+  // 날짜 포맷
+  const formatDate = (date: Date): string => {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) {
+      return '오늘';
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return '어제';
+    } else {
+      return date.toLocaleDateString('ko-KR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        weekday: 'long',
+      });
+    }
+  };
+
+  // 파일 크기 포맷
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
   if (!user) return null;
 
   if (isLoading) {
@@ -299,6 +488,29 @@ function ChatRoomPageContent() {
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
+      {/* Image Lightbox */}
+      {lightboxImage && (
+        <div
+          className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center"
+          onClick={() => setLightboxImage(null)}
+        >
+          <button
+            onClick={() => setLightboxImage(null)}
+            className="absolute top-4 right-4 p-2 text-white hover:bg-white/20 rounded-full transition"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <NextImage
+            src={lightboxImage}
+            alt="Enlarged"
+            width={1200}
+            height={800}
+            className="max-w-[90vw] max-h-[90vh] object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-4 sticky top-0 z-10">
         <Link
@@ -310,22 +522,32 @@ function ChatRoomPageContent() {
 
         <div className="flex items-center gap-3 flex-1">
           <div className="relative">
-            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-              <span className="text-blue-600 font-semibold">
-                {otherUser?.nickname[0] || '?'}
-              </span>
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+              conversation.type === 'group' ? 'bg-green-100' : 'bg-blue-100'
+            }`}>
+              {conversation.type === 'group' ? (
+                <Users className="w-5 h-5 text-green-600" />
+              ) : (
+                <span className="text-blue-600 font-semibold">
+                  {otherUser?.nickname[0] || '?'}
+                </span>
+              )}
             </div>
-            {otherUserPresence?.status === 'online' && (
+            {conversation.type !== 'group' && otherUserPresence?.status === 'online' && (
               <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white" />
             )}
           </div>
 
           <div>
             <h2 className="font-semibold text-gray-900">
-              {otherUser?.nickname || '대화'}
+              {conversation.type === 'group'
+                ? conversation.title || '그룹 채팅'
+                : otherUser?.nickname || '대화'}
             </h2>
             <p className="text-xs text-gray-500">
-              {otherUserPresence?.status === 'online'
+              {conversation.type === 'group'
+                ? `${conversation.participants.filter(p => !p.left_at).length}명 참여 중`
+                : otherUserPresence?.status === 'online'
                 ? '온라인'
                 : otherUserPresence?.last_seen_at
                 ? `최근 접속: ${getTimeAgo(new Date(otherUserPresence.last_seen_at))}`
@@ -334,14 +556,57 @@ function ChatRoomPageContent() {
           </div>
         </div>
 
-        <button className="p-2 hover:bg-gray-100 rounded-lg transition">
-          <MoreVertical className="w-5 h-5 text-gray-600" />
-        </button>
+        {/* Header Menu */}
+        <div className="relative">
+          <button
+            onClick={() => setShowHeaderMenu(!showHeaderMenu)}
+            className="p-2 hover:bg-gray-100 rounded-lg transition"
+          >
+            <MoreVertical className="w-5 h-5 text-gray-600" />
+          </button>
+
+          {showHeaderMenu && (
+            <>
+              <div
+                className="fixed inset-0 z-10"
+                onClick={() => setShowHeaderMenu(false)}
+              />
+              <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-20">
+                <button
+                  onClick={handleLeaveConversation}
+                  className="w-full px-4 py-3 text-left text-red-600 hover:bg-red-50 flex items-center gap-2 rounded-lg"
+                >
+                  <LogOut className="w-4 h-4" />
+                  대화방 나가기
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div
+        ref={messagesContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
+      >
+        {/* Load More Indicator */}
+        {isLoadingMore && (
+          <div className="flex justify-center py-4">
+            <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+          </div>
+        )}
+
+        {!hasMore && messages.length > 0 && (
+          <div className="text-center text-gray-400 text-sm py-2">
+            대화의 시작입니다
+          </div>
+        )}
+
         {messages.map((message, index) => {
+          const prevMessage = index > 0 ? messages[index - 1] : undefined;
+          const showDateDivider = shouldShowDateDivider(message, prevMessage);
           const isOwn = message.sender_id === user.id;
           const showAvatar =
             !isOwn &&
@@ -351,10 +616,19 @@ function ChatRoomPageContent() {
             messages[index + 1].sender_id !== message.sender_id;
 
           return (
-            <div
-              key={message.id}
-              className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
-            >
+            <div key={message.id}>
+              {/* Date Divider */}
+              {showDateDivider && (
+                <div className="flex items-center justify-center my-4">
+                  <div className="flex-1 border-t border-gray-200" />
+                  <span className="px-4 text-xs text-gray-500 bg-gray-50">
+                    {formatDate(new Date(message.created_at))}
+                  </span>
+                  <div className="flex-1 border-t border-gray-200" />
+                </div>
+              )}
+
+              <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
               <div className={`flex gap-2 max-w-[75%] ${isOwn ? 'flex-row-reverse' : ''}`}>
                 {/* Avatar */}
                 {!isOwn && (
@@ -389,18 +663,51 @@ function ChatRoomPageContent() {
                       {message.image_urls && message.image_urls.length > 0 && (
                         <div className="mb-1 space-y-1">
                           {message.image_urls.map((url, i) => (
-                            <div key={i} className="relative max-w-full rounded-lg overflow-hidden">
+                            <div
+                              key={i}
+                              className="relative max-w-full rounded-lg overflow-hidden cursor-pointer"
+                              onClick={() => setLightboxImage(url)}
+                            >
                               <NextImage
                                 src={url}
                                 alt="Attached"
                                 width={400}
                                 height={300}
-                                className="rounded-lg"
+                                className="rounded-lg hover:opacity-90 transition"
                                 style={{ maxWidth: '100%', height: 'auto' }}
                               />
                             </div>
                           ))}
                         </div>
+                      )}
+
+                      {/* File Attachment */}
+                      {message.file_url && (
+                        <a
+                          href={message.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`flex items-center gap-3 p-3 rounded-lg border ${
+                            isOwn
+                              ? 'bg-blue-500 border-blue-400'
+                              : 'bg-white border-gray-200'
+                          }`}
+                        >
+                          <div className={`p-2 rounded ${isOwn ? 'bg-blue-400' : 'bg-gray-100'}`}>
+                            <FileIcon className={`w-5 h-5 ${isOwn ? 'text-white' : 'text-gray-600'}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-medium truncate ${isOwn ? 'text-white' : 'text-gray-900'}`}>
+                              {message.file_name || '파일'}
+                            </p>
+                            {message.file_size && (
+                              <p className={`text-xs ${isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
+                                {formatFileSize(message.file_size)}
+                              </p>
+                            )}
+                          </div>
+                          <Download className={`w-5 h-5 ${isOwn ? 'text-white' : 'text-gray-600'}`} />
+                        </a>
                       )}
 
                       {/* Text */}
@@ -475,6 +782,15 @@ function ChatRoomPageContent() {
                         >
                           <Reply className="w-4 h-4 text-gray-600" />
                         </button>
+                        {message.content && (
+                          <button
+                            onClick={() => handleCopyMessage(message.content || '')}
+                            className="p-1 hover:bg-gray-100 rounded"
+                            title="복사"
+                          >
+                            <Copy className="w-4 h-4 text-gray-600" />
+                          </button>
+                        )}
                         {isOwn && (
                           <>
                             <button
@@ -502,6 +818,7 @@ function ChatRoomPageContent() {
                 </div>
               </div>
             </div>
+            </div>
           );
         })}
 
@@ -519,6 +836,23 @@ function ChatRoomPageContent() {
 
         <div ref={messagesEndRef} />
       </div>
+
+      {/* New Message Banner */}
+      {showNewMessageBanner && (
+        <div className="absolute bottom-32 left-1/2 transform -translate-x-1/2 z-20">
+          <button
+            onClick={() => {
+              scrollToBottom();
+              setShowNewMessageBanner(false);
+              setNewMessageCount(0);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 transition"
+          >
+            <ChevronDown className="w-4 h-4" />
+            새 메시지 {newMessageCount > 0 && `(${newMessageCount})`}
+          </button>
+        </div>
+      )}
 
       {/* Reply Preview */}
       {replyTo && (
@@ -568,12 +902,39 @@ function ChatRoomPageContent() {
         </div>
       )}
 
+      {/* File Preview */}
+      {selectedFile && (
+        <div className="px-4 py-2 bg-gray-100 border-t border-gray-200">
+          <div className="flex items-center gap-3 p-2 bg-white rounded-lg border border-gray-200">
+            <div className="p-2 bg-gray-100 rounded">
+              <FileIcon className="w-5 h-5 text-gray-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 truncate">
+                {selectedFile.name}
+              </p>
+              <p className="text-xs text-gray-500">
+                {formatFileSize(selectedFile.size)}
+              </p>
+            </div>
+            <button
+              onClick={() => setSelectedFile(null)}
+              className="p-1 hover:bg-gray-200 rounded"
+            >
+              <X className="w-4 h-4 text-gray-600" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Input */}
       <div className="bg-white border-t border-gray-200 px-4 py-3">
         <div className="flex items-end gap-2">
+          {/* Image Button */}
           <button
             onClick={() => fileInputRef.current?.click()}
             className="p-2 hover:bg-gray-100 rounded-lg transition"
+            title="이미지 첨부"
           >
             <ImageIcon className="w-5 h-5 text-gray-600" />
           </button>
@@ -583,6 +944,21 @@ function ChatRoomPageContent() {
             accept="image/*"
             multiple
             onChange={handleImageSelect}
+            className="hidden"
+          />
+
+          {/* File Button */}
+          <button
+            onClick={() => documentInputRef.current?.click()}
+            className="p-2 hover:bg-gray-100 rounded-lg transition"
+            title="파일 첨부"
+          >
+            <FileIcon className="w-5 h-5 text-gray-600" />
+          </button>
+          <input
+            ref={documentInputRef}
+            type="file"
+            onChange={handleFileSelect}
             className="hidden"
           />
 
@@ -602,7 +978,7 @@ function ChatRoomPageContent() {
 
           <button
             onClick={handleSend}
-            disabled={isSending || (!messageText.trim() && selectedImages.length === 0)}
+            disabled={isSending || (!messageText.trim() && selectedImages.length === 0 && !selectedFile)}
             className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:bg-gray-300 disabled:cursor-not-allowed"
           >
             {isSending ? (

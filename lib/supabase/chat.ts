@@ -164,6 +164,9 @@ export async function sendMessage(data: {
   content: string;
   message_type?: string;
   image_urls?: string[];
+  file_url?: string;
+  file_name?: string;
+  file_size?: number;
   reply_to_id?: string;
 }) {
   const { data: messageId, error } = await supabase.rpc('send_message', {
@@ -172,6 +175,9 @@ export async function sendMessage(data: {
     p_content: data.content,
     p_message_type: data.message_type || 'text',
     p_image_urls: data.image_urls || [],
+    p_file_url: data.file_url || null,
+    p_file_name: data.file_name || null,
+    p_file_size: data.file_size || null,
     p_reply_to_id: data.reply_to_id || null,
   });
 
@@ -347,6 +353,48 @@ export async function leaveConversation(conversationId: string, userId: string) 
     .eq('user_id', userId);
 
   if (error) throw error;
+}
+
+// Create group conversation
+export async function createGroupConversation(
+  createdBy: string,
+  title: string,
+  participantIds: string[]
+): Promise<string> {
+  const { data, error } = await supabase.rpc('create_group_conversation', {
+    p_created_by: createdBy,
+    p_title: title,
+    p_participant_ids: participantIds,
+  });
+
+  if (error) throw error;
+  return data as string;
+}
+
+// Add participants to conversation
+export async function addConversationParticipants(
+  conversationId: string,
+  participantIds: string[]
+) {
+  const { error } = await supabase.rpc('add_conversation_participants', {
+    p_conversation_id: conversationId,
+    p_participant_ids: participantIds,
+  });
+
+  if (error) throw error;
+}
+
+// Get users for group creation (search)
+export async function searchUsers(query: string, currentUserId: string, limit = 20) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, nickname, avatar_url, role')
+    .neq('id', currentUserId)
+    .ilike('nickname', `%${query}%`)
+    .limit(limit);
+
+  if (error) throw error;
+  return data;
 }
 
 // Subscribe to new messages in a conversation
