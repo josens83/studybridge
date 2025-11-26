@@ -23,6 +23,11 @@ import {
   ChevronDown,
   LogOut,
   Users,
+  Forward,
+  Settings,
+  UserPlus,
+  UserMinus,
+  Search,
 } from 'lucide-react';
 import { useAuthStore } from '@/lib/store/auth';
 import {
@@ -38,8 +43,18 @@ import {
   updatePresence,
   getUserPresence,
   leaveConversation,
+  toggleReaction,
+  forwardMessage,
+  getConversations,
+  updateGroupConversation,
+  getConversationParticipants,
+  removeParticipant,
+  addConversationParticipants,
+  searchUsers,
 } from '@/lib/supabase/chat';
 import { uploadFile } from '@/lib/supabase/storage';
+import { QuickReactions, MessageReactions } from '@/components/chat/EmojiPicker';
+import LinkPreview, { extractUrls, renderTextWithLinks } from '@/components/chat/LinkPreview';
 import { uploadImage } from '@/lib/supabase/storage';
 import type { ConversationWithDetails, MessageWithSender, UserPresence } from '@/types';
 import ErrorBoundary from '@/components/error/ErrorBoundary';
@@ -87,7 +102,42 @@ function ChatRoomPageContent() {
   // 스크롤 위치 추적
   const [isAtBottom, setIsAtBottom] = useState(true);
 
+  // 이모지 반응 관련
+  const [showReactionPicker, setShowReactionPicker] = useState<string | null>(null);
+
+  // 메시지 포워딩
+  const [showForwardModal, setShowForwardModal] = useState(false);
+  const [forwardingMessage, setForwardingMessage] = useState<MessageWithSender | null>(null);
+  const [forwardConversations, setForwardConversations] = useState<any[]>([]);
+  const [isForwarding, setIsForwarding] = useState(false);
+
+  // 그룹 관리
+  const [showGroupSettings, setShowGroupSettings] = useState(false);
+  const [groupParticipants, setGroupParticipants] = useState<any[]>([]);
+  const [newGroupTitle, setNewGroupTitle] = useState('');
+  const [showAddParticipant, setShowAddParticipant] = useState(false);
+  const [participantSearchQuery, setParticipantSearchQuery] = useState('');
+  const [participantSearchResults, setParticipantSearchResults] = useState<any[]>([]);
+
+  // 드래그 앤 드롭
+  const [isDragging, setIsDragging] = useState(false);
+
+  // 멘션 기능
+  const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionSuggestions, setMentionSuggestions] = useState<any[]>([]);
+  const [mentionStartIndex, setMentionStartIndex] = useState<number | null>(null);
+
+  // 읽지 않은 메시지 자동 스크롤
+  const [firstUnreadMessageId, setFirstUnreadMessageId] = useState<string | null>(null);
+  const [showJumpToUnread, setShowJumpToUnread] = useState(false);
+
+  // 모바일 터치 관련
+  const [touchedMessageId, setTouchedMessageId] = useState<string | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const firstUnreadRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
@@ -186,6 +236,15 @@ function ChatRoomPageContent() {
       setMessages(messagesData);
       setHasMore(messagesData.length >= 50);
 
+      // Find first unread message
+      const firstUnread = messagesData.find(
+        (msg) => msg.sender_id !== user.id && !(msg.read_by || []).includes(user.id)
+      );
+      if (firstUnread) {
+        setFirstUnreadMessageId(firstUnread.id);
+        setShowJumpToUnread(true);
+      }
+
       // Mark messages as read
       await markMessagesAsRead(conversationId, user.id);
 
@@ -198,6 +257,23 @@ function ChatRoomPageContent() {
       console.error('Error loading chat:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // 읽지 않은 메시지로 스크롤
+  const scrollToFirstUnread = () => {
+    if (firstUnreadRef.current) {
+      firstUnreadRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    setShowJumpToUnread(false);
+  };
+
+  // 모바일 터치 핸들러
+  const handleMessageTouch = (messageId: string) => {
+    if (touchedMessageId === messageId) {
+      setTouchedMessageId(null);
+    } else {
+      setTouchedMessageId(messageId);
     }
   };
 
@@ -374,11 +450,54 @@ function ChatRoomPageContent() {
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
+    // Enter to send (without shift)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
+    // Escape to clear reply/edit
+    if (e.key === 'Escape') {
+      if (replyTo) setReplyTo(null);
+      if (editingMessage) {
+        setEditingMessage(null);
+        setEditText('');
+      }
+      if (showMentionSuggestions) {
+        setShowMentionSuggestions(false);
+      }
+    }
+    // Ctrl+Shift+E for emoji picker (future implementation)
   };
+
+  // 글로벌 키보드 단축키
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + / to focus input
+      if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+        e.preventDefault();
+        textareaRef.current?.focus();
+      }
+      // Escape to close modals
+      if (e.key === 'Escape') {
+        if (showForwardModal) {
+          setShowForwardModal(false);
+          setForwardingMessage(null);
+        }
+        if (showGroupSettings) {
+          setShowGroupSettings(false);
+        }
+        if (lightboxImage) {
+          setLightboxImage(null);
+        }
+        if (showReactionPicker) {
+          setShowReactionPicker(null);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [showForwardModal, showGroupSettings, lightboxImage, showReactionPicker]);
 
   // 파일 선택 핸들러
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -403,6 +522,285 @@ function ChatRoomPageContent() {
       console.error('Failed to copy message:', error);
     }
     setActiveMessageMenu(null);
+  };
+
+  // 이모지 반응 핸들러
+  const handleReaction = async (messageId: string, emoji: string) => {
+    if (!user) return;
+
+    try {
+      const updatedReactions = await toggleReaction(messageId, user.id, emoji);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? { ...m, metadata: { ...m.metadata, reactions: updatedReactions } }
+            : m
+        )
+      );
+    } catch (error) {
+      console.error('Error toggling reaction:', error);
+    }
+    setShowReactionPicker(null);
+  };
+
+  // 메시지 전달 핸들러
+  const handleOpenForwardModal = async (message: MessageWithSender) => {
+    setForwardingMessage(message);
+    try {
+      const conversations = await getConversations(user!.id);
+      setForwardConversations(conversations.filter((c) => c.id !== conversationId));
+    } catch (error) {
+      console.error('Error loading conversations:', error);
+    }
+    setShowForwardModal(true);
+  };
+
+  const handleForwardMessage = async (targetConversationId: string) => {
+    if (!user || !forwardingMessage) return;
+
+    setIsForwarding(true);
+    try {
+      await forwardMessage(forwardingMessage.id, targetConversationId, user.id);
+      alert('메시지가 전달되었습니다.');
+      setShowForwardModal(false);
+      setForwardingMessage(null);
+    } catch (error) {
+      console.error('Error forwarding message:', error);
+      alert('메시지 전달에 실패했습니다.');
+    } finally {
+      setIsForwarding(false);
+    }
+  };
+
+  // 그룹 설정 열기
+  const handleOpenGroupSettings = async () => {
+    try {
+      const participants = await getConversationParticipants(conversationId);
+      setGroupParticipants(participants);
+      setNewGroupTitle(conversation?.title || '');
+    } catch (error) {
+      console.error('Error loading participants:', error);
+    }
+    setShowGroupSettings(true);
+    setShowHeaderMenu(false);
+  };
+
+  // 그룹 제목 변경
+  const handleUpdateGroupTitle = async () => {
+    if (!newGroupTitle.trim()) return;
+
+    try {
+      await updateGroupConversation(conversationId, { title: newGroupTitle.trim() });
+      setConversation((prev) => prev ? { ...prev, title: newGroupTitle.trim() } : null);
+      alert('그룹명이 변경되었습니다.');
+    } catch (error) {
+      console.error('Error updating group title:', error);
+      alert('그룹명 변경에 실패했습니다.');
+    }
+  };
+
+  // 참여자 제거
+  const handleRemoveParticipant = async (userId: string) => {
+    if (!confirm('이 참여자를 그룹에서 제거하시겠습니까?')) return;
+
+    try {
+      await removeParticipant(conversationId, userId);
+      setGroupParticipants((prev) => prev.filter((p) => p.user_id !== userId));
+    } catch (error) {
+      console.error('Error removing participant:', error);
+      alert('참여자 제거에 실패했습니다.');
+    }
+  };
+
+  // 참여자 검색
+  const handleSearchParticipants = async (query: string) => {
+    setParticipantSearchQuery(query);
+    if (!query.trim()) {
+      setParticipantSearchResults([]);
+      return;
+    }
+
+    try {
+      const results = await searchUsers(query, user!.id);
+      // 이미 참여중인 유저 제외
+      const existingIds = groupParticipants.map((p) => p.user_id);
+      setParticipantSearchResults(results.filter((r) => !existingIds.includes(r.id)));
+    } catch (error) {
+      console.error('Error searching users:', error);
+    }
+  };
+
+  // 참여자 추가
+  const handleAddParticipant = async (userId: string) => {
+    try {
+      await addConversationParticipants(conversationId, [userId]);
+      const updatedParticipants = await getConversationParticipants(conversationId);
+      setGroupParticipants(updatedParticipants);
+      setParticipantSearchQuery('');
+      setParticipantSearchResults([]);
+      setShowAddParticipant(false);
+    } catch (error) {
+      console.error('Error adding participant:', error);
+      alert('참여자 추가에 실패했습니다.');
+    }
+  };
+
+  // 멘션 입력 핸들러
+  const handleTextChange = async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const text = e.target.value;
+    setMessageText(text);
+    handleTyping();
+
+    // @ 멘션 감지
+    const cursorPos = e.target.selectionStart || 0;
+    const textBeforeCursor = text.slice(0, cursorPos);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+
+    if (lastAtIndex !== -1) {
+      const afterAt = textBeforeCursor.slice(lastAtIndex + 1);
+      // 공백이 없으면 멘션 쿼리로 인식
+      if (!afterAt.includes(' ')) {
+        setMentionStartIndex(lastAtIndex);
+        setMentionQuery(afterAt);
+
+        // 그룹 채팅인 경우 참여자 검색, 아니면 모든 사용자 검색
+        if (conversation?.type === 'group' && conversation.participants) {
+          const participants = conversation.participants
+            .filter((p) => p.user?.nickname.toLowerCase().includes(afterAt.toLowerCase()) && p.user_id !== user?.id)
+            .map((p) => p.user)
+            .slice(0, 5);
+          setMentionSuggestions(participants);
+          setShowMentionSuggestions(participants.length > 0);
+        } else if (afterAt.length > 0) {
+          try {
+            const results = await searchUsers(afterAt, user!.id, 5);
+            setMentionSuggestions(results);
+            setShowMentionSuggestions(results.length > 0);
+          } catch (error) {
+            console.error('Error searching users for mention:', error);
+          }
+        } else {
+          setShowMentionSuggestions(false);
+        }
+        return;
+      }
+    }
+
+    setShowMentionSuggestions(false);
+    setMentionStartIndex(null);
+  };
+
+  // 멘션 선택 핸들러
+  const handleSelectMention = (selectedUser: any) => {
+    if (mentionStartIndex === null) return;
+
+    const beforeMention = messageText.slice(0, mentionStartIndex);
+    const afterMention = messageText.slice(mentionStartIndex + mentionQuery.length + 1);
+    const newText = `${beforeMention}@${selectedUser.nickname} ${afterMention}`;
+
+    setMessageText(newText);
+    setShowMentionSuggestions(false);
+    setMentionStartIndex(null);
+    setMentionQuery('');
+  };
+
+  // 메시지 내 멘션 및 링크 렌더링
+  const renderMessageContent = (content: string, isOwn: boolean = false) => {
+    // URL 정규식
+    const urlRegex = /(https?:\/\/[^\s<>"\]]+)/gi;
+    // 멘션 정규식
+    const mentionRegex = /@(\S+)/g;
+    // 결합된 정규식
+    const combinedRegex = /(https?:\/\/[^\s<>"\]]+)|(@\S+)/gi;
+
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match;
+    let keyIndex = 0;
+
+    while ((match = combinedRegex.exec(content)) !== null) {
+      // 매치 이전 텍스트
+      if (match.index > lastIndex) {
+        parts.push(content.slice(lastIndex, match.index));
+      }
+
+      // URL인 경우
+      if (match[1]) {
+        parts.push(
+          <a
+            key={`link-${keyIndex++}`}
+            href={match[1]}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`underline break-all ${isOwn ? 'text-blue-200' : 'text-blue-600'} hover:opacity-80`}
+          >
+            {match[1]}
+          </a>
+        );
+      }
+      // 멘션인 경우
+      else if (match[2]) {
+        parts.push(
+          <span
+            key={`mention-${keyIndex++}`}
+            className={`font-semibold cursor-pointer hover:underline ${isOwn ? 'text-blue-200' : 'text-blue-500'}`}
+          >
+            {match[2]}
+          </span>
+        );
+      }
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    // 나머지 텍스트
+    if (lastIndex < content.length) {
+      parts.push(content.slice(lastIndex));
+    }
+
+    return parts.length > 0 ? parts : content;
+  };
+
+  // 드래그 앤 드롭 핸들러
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+
+    // 이미지 파일과 일반 파일 분리
+    const imageFiles = files.filter((f) => f.type.startsWith('image/'));
+    const otherFiles = files.filter((f) => !f.type.startsWith('image/'));
+
+    // 이미지 파일 처리
+    if (imageFiles.length > 0) {
+      if (imageFiles.length + selectedImages.length > 5) {
+        alert('이미지는 최대 5개까지 첨부할 수 있습니다.');
+        return;
+      }
+      setSelectedImages((prev) => [...prev, ...imageFiles]);
+    }
+
+    // 일반 파일 처리 (첫 번째 파일만)
+    if (otherFiles.length > 0) {
+      const file = otherFiles[0];
+      if (file.size > 20 * 1024 * 1024) {
+        alert('파일 크기는 20MB를 초과할 수 없습니다.');
+        return;
+      }
+      setSelectedFile(file);
+    }
   };
 
   // 대화방 나가기 핸들러
@@ -487,7 +885,200 @@ function ChatRoomPageContent() {
   const otherUser = conversation.other_participant;
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div
+      className="h-screen flex flex-col bg-gray-50 relative"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Drag Overlay */}
+      {isDragging && (
+        <div className="absolute inset-0 bg-blue-500/20 z-50 flex items-center justify-center border-4 border-dashed border-blue-500 rounded-lg m-4">
+          <div className="bg-white px-8 py-6 rounded-xl shadow-lg text-center">
+            <FileIcon className="w-12 h-12 text-blue-500 mx-auto mb-3" />
+            <p className="text-lg font-semibold text-gray-700">파일을 여기에 놓으세요</p>
+            <p className="text-sm text-gray-500 mt-1">이미지 또는 파일을 드롭하여 첨부</p>
+          </div>
+        </div>
+      )}
+
+      {/* Forward Modal */}
+      {showForwardModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="font-semibold text-lg">메시지 전달</h3>
+              <button
+                onClick={() => {
+                  setShowForwardModal(false);
+                  setForwardingMessage(null);
+                }}
+                className="p-1 hover:bg-gray-100 rounded"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 max-h-96 overflow-y-auto">
+              {forwardConversations.length === 0 ? (
+                <p className="text-gray-500 text-center py-4">전달할 대화방이 없습니다.</p>
+              ) : (
+                <div className="space-y-2">
+                  {forwardConversations.map((conv) => (
+                    <button
+                      key={conv.id}
+                      onClick={() => handleForwardMessage(conv.id)}
+                      disabled={isForwarding}
+                      className="w-full p-3 flex items-center gap-3 hover:bg-gray-50 rounded-lg transition text-left"
+                    >
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                        conv.type === 'group' ? 'bg-green-100' : 'bg-blue-100'
+                      }`}>
+                        {conv.type === 'group' ? (
+                          <Users className="w-5 h-5 text-green-600" />
+                        ) : (
+                          <span className="text-blue-600 font-semibold">
+                            {conv.other_participant?.nickname[0] || '?'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 truncate">
+                          {conv.type === 'group'
+                            ? conv.title || '그룹 채팅'
+                            : conv.other_participant?.nickname}
+                        </p>
+                      </div>
+                      {isForwarding && <Loader2 className="w-4 h-4 animate-spin text-blue-600" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Group Settings Modal */}
+      {showGroupSettings && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="font-semibold text-lg">그룹 설정</h3>
+              <button
+                onClick={() => {
+                  setShowGroupSettings(false);
+                  setShowAddParticipant(false);
+                  setParticipantSearchQuery('');
+                  setParticipantSearchResults([]);
+                }}
+                className="p-1 hover:bg-gray-100 rounded"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              {/* 그룹명 변경 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">그룹명</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newGroupTitle}
+                    onChange={(e) => setNewGroupTitle(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="그룹명을 입력하세요"
+                  />
+                  <button
+                    onClick={handleUpdateGroupTitle}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                  >
+                    변경
+                  </button>
+                </div>
+              </div>
+
+              {/* 참여자 목록 */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    참여자 ({groupParticipants.length}명)
+                  </label>
+                  <button
+                    onClick={() => setShowAddParticipant(!showAddParticipant)}
+                    className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    추가
+                  </button>
+                </div>
+
+                {/* 참여자 추가 검색 */}
+                {showAddParticipant && (
+                  <div className="mb-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input
+                        type="text"
+                        value={participantSearchQuery}
+                        onChange={(e) => handleSearchParticipants(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="사용자 검색..."
+                      />
+                    </div>
+                    {participantSearchResults.length > 0 && (
+                      <div className="mt-2 border border-gray-200 rounded-lg overflow-hidden">
+                        {participantSearchResults.map((user) => (
+                          <button
+                            key={user.id}
+                            onClick={() => handleAddParticipant(user.id)}
+                            className="w-full p-2 flex items-center gap-2 hover:bg-gray-50 text-left"
+                          >
+                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                              <span className="text-blue-600 font-semibold text-sm">
+                                {user.nickname[0]}
+                              </span>
+                            </div>
+                            <span className="text-sm">{user.nickname}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {groupParticipants.map((participant) => (
+                    <div
+                      key={participant.user_id}
+                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50"
+                    >
+                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                        <span className="text-blue-600 font-semibold text-sm">
+                          {participant.user?.nickname[0] || '?'}
+                        </span>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{participant.user?.nickname}</p>
+                        <p className="text-xs text-gray-500">{participant.role === 'admin' ? '관리자' : '멤버'}</p>
+                      </div>
+                      {participant.user_id !== user?.id && participant.role !== 'admin' && (
+                        <button
+                          onClick={() => handleRemoveParticipant(participant.user_id)}
+                          className="p-1 text-red-500 hover:bg-red-50 rounded"
+                          title="제거"
+                        >
+                          <UserMinus className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Image Lightbox */}
       {lightboxImage && (
         <div
@@ -571,10 +1162,19 @@ function ChatRoomPageContent() {
                 className="fixed inset-0 z-10"
                 onClick={() => setShowHeaderMenu(false)}
               />
-              <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-20">
+              <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-20 overflow-hidden">
+                {conversation.type === 'group' && (
+                  <button
+                    onClick={handleOpenGroupSettings}
+                    className="w-full px-4 py-3 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <Settings className="w-4 h-4" />
+                    그룹 설정
+                  </button>
+                )}
                 <button
                   onClick={handleLeaveConversation}
-                  className="w-full px-4 py-3 text-left text-red-600 hover:bg-red-50 flex items-center gap-2 rounded-lg"
+                  className="w-full px-4 py-3 text-left text-red-600 hover:bg-red-50 flex items-center gap-2"
                 >
                   <LogOut className="w-4 h-4" />
                   대화방 나가기
@@ -614,9 +1214,14 @@ function ChatRoomPageContent() {
           const showTime =
             index === messages.length - 1 ||
             messages[index + 1].sender_id !== message.sender_id;
+          const isFirstUnread = message.id === firstUnreadMessageId;
+          const showMobileActions = touchedMessageId === message.id;
 
           return (
-            <div key={message.id}>
+            <div
+              key={message.id}
+              ref={isFirstUnread ? firstUnreadRef : undefined}
+            >
               {/* Date Divider */}
               {showDateDivider && (
                 <div className="flex items-center justify-center my-4">
@@ -625,6 +1230,17 @@ function ChatRoomPageContent() {
                     {formatDate(new Date(message.created_at))}
                   </span>
                   <div className="flex-1 border-t border-gray-200" />
+                </div>
+              )}
+
+              {/* Unread Messages Divider */}
+              {isFirstUnread && (
+                <div className="flex items-center justify-center my-4">
+                  <div className="flex-1 border-t border-orange-400" />
+                  <span className="px-4 text-xs text-orange-600 bg-orange-50 rounded-full">
+                    여기서부터 읽지 않은 메시지
+                  </span>
+                  <div className="flex-1 border-t border-orange-400" />
                 </div>
               )}
 
@@ -644,7 +1260,10 @@ function ChatRoomPageContent() {
                 )}
 
                 {/* Message Content */}
-                <div className={`relative group ${isOwn ? 'items-end' : 'items-start'}`}>
+                <div
+                  className={`relative group ${isOwn ? 'items-end' : 'items-start'}`}
+                  onClick={() => handleMessageTouch(message.id)}
+                >
                   {/* Reply Preview */}
                   {message.reply_to && (
                     <div className="text-xs text-gray-500 mb-1 px-3 py-1 bg-gray-100 rounded border-l-2 border-gray-300">
@@ -712,38 +1331,44 @@ function ChatRoomPageContent() {
 
                       {/* Text */}
                       {message.content && (
-                        <div
-                          className={`px-4 py-2 rounded-2xl ${
-                            isOwn
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-white border border-gray-200'
-                          }`}
-                        >
-                          <p className="whitespace-pre-wrap break-words">
-                            {editingMessage?.id === message.id ? (
-                              <input
-                                type="text"
-                                value={editText}
-                                onChange={(e) => setEditText(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') handleEditSave();
-                                  if (e.key === 'Escape') {
-                                    setEditingMessage(null);
-                                    setEditText('');
-                                  }
-                                }}
-                                className="w-full bg-transparent border-none outline-none"
-                                autoFocus
-                              />
-                            ) : (
-                              message.content
+                        <div>
+                          <div
+                            className={`px-4 py-2 rounded-2xl ${
+                              isOwn
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-white border border-gray-200'
+                            }`}
+                          >
+                            <p className="whitespace-pre-wrap break-words">
+                              {editingMessage?.id === message.id ? (
+                                <input
+                                  type="text"
+                                  value={editText}
+                                  onChange={(e) => setEditText(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleEditSave();
+                                    if (e.key === 'Escape') {
+                                      setEditingMessage(null);
+                                      setEditText('');
+                                    }
+                                  }}
+                                  className="w-full bg-transparent border-none outline-none"
+                                  autoFocus
+                                />
+                              ) : (
+                                renderMessageContent(message.content, isOwn)
+                              )}
+                            </p>
+                            {message.is_edited && (
+                              <span className={`text-xs ${isOwn ? 'text-blue-200' : 'text-gray-400'}`}>
+                                (수정됨)
+                              </span>
                             )}
-                          </p>
-                          {message.is_edited && (
-                            <span className={`text-xs ${isOwn ? 'text-blue-200' : 'text-gray-400'}`}>
-                              (수정됨)
-                            </span>
-                          )}
+                          </div>
+                          {/* Link Preview */}
+                          {extractUrls(message.content).slice(0, 1).map((url, idx) => (
+                            <LinkPreview key={idx} url={url} isOwn={isOwn} />
+                          ))}
                         </div>
                       )}
                     </>
@@ -767,51 +1392,90 @@ function ChatRoomPageContent() {
                     </div>
                   )}
 
+                  {/* Message Reactions Display */}
+                  {message.metadata?.reactions && Object.keys(message.metadata.reactions).length > 0 && (
+                    <MessageReactions
+                      reactions={message.metadata.reactions}
+                      currentUserId={user.id}
+                      onToggle={(emoji) => handleReaction(message.id, emoji)}
+                    />
+                  )}
+
                   {/* Message Actions */}
                   {!message.is_deleted && (
                     <div
                       className={`absolute top-0 ${
                         isOwn ? 'left-0 -translate-x-full' : 'right-0 translate-x-full'
-                      } opacity-0 group-hover:opacity-100 transition px-2`}
+                      } ${showMobileActions ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition px-2`}
                     >
-                      <div className="flex items-center gap-1 bg-white shadow-sm rounded-lg border border-gray-200 p-1">
-                        <button
-                          onClick={() => setReplyTo(message)}
-                          className="p-1 hover:bg-gray-100 rounded"
-                          title="답장"
-                        >
-                          <Reply className="w-4 h-4 text-gray-600" />
-                        </button>
-                        {message.content && (
+                      <div className="flex flex-col gap-1">
+                        {/* Quick Reactions */}
+                        {showReactionPicker === message.id ? (
+                          <div className="relative">
+                            <QuickReactions onSelect={(emoji) => handleReaction(message.id, emoji)} />
+                            <button
+                              onClick={() => setShowReactionPicker(null)}
+                              className="absolute -top-2 -right-2 w-5 h-5 bg-gray-200 rounded-full flex items-center justify-center"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : null}
+
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-1 bg-white shadow-sm rounded-lg border border-gray-200 p-1">
                           <button
-                            onClick={() => handleCopyMessage(message.content || '')}
+                            onClick={() => setShowReactionPicker(showReactionPicker === message.id ? null : message.id)}
                             className="p-1 hover:bg-gray-100 rounded"
-                            title="복사"
+                            title="반응"
                           >
-                            <Copy className="w-4 h-4 text-gray-600" />
+                            <Smile className="w-4 h-4 text-gray-600" />
                           </button>
-                        )}
-                        {isOwn && (
-                          <>
+                          <button
+                            onClick={() => setReplyTo(message)}
+                            className="p-1 hover:bg-gray-100 rounded"
+                            title="답장"
+                          >
+                            <Reply className="w-4 h-4 text-gray-600" />
+                          </button>
+                          <button
+                            onClick={() => handleOpenForwardModal(message)}
+                            className="p-1 hover:bg-gray-100 rounded"
+                            title="전달"
+                          >
+                            <Forward className="w-4 h-4 text-gray-600" />
+                          </button>
+                          {message.content && (
                             <button
-                              onClick={() => {
-                                setEditingMessage(message);
-                                setEditText(message.content || '');
-                              }}
+                              onClick={() => handleCopyMessage(message.content || '')}
                               className="p-1 hover:bg-gray-100 rounded"
-                              title="수정"
+                              title="복사"
                             >
-                              <Edit className="w-4 h-4 text-gray-600" />
+                              <Copy className="w-4 h-4 text-gray-600" />
                             </button>
-                            <button
-                              onClick={() => handleDelete(message.id)}
-                              className="p-1 hover:bg-gray-100 rounded"
-                              title="삭제"
-                            >
-                              <Trash2 className="w-4 h-4 text-red-600" />
-                            </button>
-                          </>
-                        )}
+                          )}
+                          {isOwn && (
+                            <>
+                              <button
+                                onClick={() => {
+                                  setEditingMessage(message);
+                                  setEditText(message.content || '');
+                                }}
+                                className="p-1 hover:bg-gray-100 rounded"
+                                title="수정"
+                              >
+                                <Edit className="w-4 h-4 text-gray-600" />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(message.id)}
+                                className="p-1 hover:bg-gray-100 rounded"
+                                title="삭제"
+                              >
+                                <Trash2 className="w-4 h-4 text-red-600" />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -836,6 +1500,19 @@ function ChatRoomPageContent() {
 
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Jump to Unread Banner */}
+      {showJumpToUnread && firstUnreadMessageId && (
+        <div className="absolute top-32 left-1/2 transform -translate-x-1/2 z-20">
+          <button
+            onClick={scrollToFirstUnread}
+            className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-full shadow-lg hover:bg-orange-600 transition"
+          >
+            <ChevronDown className="w-4 h-4 rotate-180" />
+            읽지 않은 메시지로 이동
+          </button>
+        </div>
+      )}
 
       {/* New Message Banner */}
       {showNewMessageBanner && (
@@ -963,14 +1640,34 @@ function ChatRoomPageContent() {
           />
 
           <div className="flex-1 relative">
+            {/* Mention Suggestions */}
+            {showMentionSuggestions && mentionSuggestions.length > 0 && (
+              <div className="absolute bottom-full mb-2 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
+                {mentionSuggestions.map((suggestedUser) => (
+                  <button
+                    key={suggestedUser.id}
+                    onClick={() => handleSelectMention(suggestedUser)}
+                    className="w-full p-3 flex items-center gap-3 hover:bg-blue-50 text-left transition"
+                  >
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      <span className="text-blue-600 font-semibold text-sm">
+                        {suggestedUser.nickname[0]}
+                      </span>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">{suggestedUser.nickname}</p>
+                      <p className="text-xs text-gray-500">{suggestedUser.role || '사용자'}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
             <textarea
+              ref={textareaRef}
               value={messageText}
-              onChange={(e) => {
-                setMessageText(e.target.value);
-                handleTyping();
-              }}
+              onChange={handleTextChange}
               onKeyDown={handleKeyPress}
-              placeholder="메시지를 입력하세요..."
+              placeholder="메시지를 입력하세요... (@로 멘션)"
               rows={1}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none max-h-32"
             />

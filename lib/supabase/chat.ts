@@ -397,6 +397,175 @@ export async function searchUsers(query: string, currentUserId: string, limit = 
   return data;
 }
 
+// Add emoji reaction to message
+export async function addReaction(messageId: string, userId: string, emoji: string) {
+  // Get current message metadata
+  const { data: message, error: fetchError } = await supabase
+    .from('messages')
+    .select('metadata')
+    .eq('id', messageId)
+    .single();
+
+  if (fetchError) throw fetchError;
+
+  const metadata = message?.metadata || {};
+  const reactions = metadata.reactions || {};
+
+  // Add or update reaction
+  if (!reactions[emoji]) {
+    reactions[emoji] = [];
+  }
+
+  if (!reactions[emoji].includes(userId)) {
+    reactions[emoji].push(userId);
+  }
+
+  // Update message metadata
+  const { error } = await supabase
+    .from('messages')
+    .update({ metadata: { ...metadata, reactions } })
+    .eq('id', messageId);
+
+  if (error) throw error;
+  return reactions;
+}
+
+// Remove emoji reaction from message
+export async function removeReaction(messageId: string, userId: string, emoji: string) {
+  const { data: message, error: fetchError } = await supabase
+    .from('messages')
+    .select('metadata')
+    .eq('id', messageId)
+    .single();
+
+  if (fetchError) throw fetchError;
+
+  const metadata = message?.metadata || {};
+  const reactions = metadata.reactions || {};
+
+  if (reactions[emoji]) {
+    reactions[emoji] = reactions[emoji].filter((id: string) => id !== userId);
+    if (reactions[emoji].length === 0) {
+      delete reactions[emoji];
+    }
+  }
+
+  const { error } = await supabase
+    .from('messages')
+    .update({ metadata: { ...metadata, reactions } })
+    .eq('id', messageId);
+
+  if (error) throw error;
+  return reactions;
+}
+
+// Toggle emoji reaction
+export async function toggleReaction(messageId: string, userId: string, emoji: string) {
+  const { data: message, error: fetchError } = await supabase
+    .from('messages')
+    .select('metadata')
+    .eq('id', messageId)
+    .single();
+
+  if (fetchError) throw fetchError;
+
+  const metadata = message?.metadata || {};
+  const reactions = metadata.reactions || {};
+
+  const hasReacted = reactions[emoji]?.includes(userId);
+
+  if (hasReacted) {
+    return removeReaction(messageId, userId, emoji);
+  } else {
+    return addReaction(messageId, userId, emoji);
+  }
+}
+
+// Forward message to another conversation
+export async function forwardMessage(
+  originalMessageId: string,
+  targetConversationId: string,
+  senderId: string
+) {
+  // Get original message
+  const { data: original, error: fetchError } = await supabase
+    .from('messages')
+    .select('content, message_type, image_urls, file_url, file_name, file_size')
+    .eq('id', originalMessageId)
+    .single();
+
+  if (fetchError) throw fetchError;
+
+  // Create forwarded message
+  const { data: messageId, error } = await supabase.rpc('send_message', {
+    p_conversation_id: targetConversationId,
+    p_sender_id: senderId,
+    p_content: original.content,
+    p_message_type: original.message_type,
+    p_image_urls: original.image_urls || [],
+    p_file_url: original.file_url,
+    p_file_name: original.file_name,
+    p_file_size: original.file_size,
+    p_reply_to_id: null,
+  });
+
+  if (error) throw error;
+
+  // Mark as forwarded in metadata
+  await supabase
+    .from('messages')
+    .update({
+      metadata: { forwarded_from: originalMessageId }
+    })
+    .eq('id', messageId);
+
+  return messageId;
+}
+
+// Update group conversation details
+export async function updateGroupConversation(
+  conversationId: string,
+  updates: { title?: string }
+) {
+  const { error } = await supabase
+    .from('conversations')
+    .update(updates)
+    .eq('id', conversationId);
+
+  if (error) throw error;
+}
+
+// Remove participant from conversation (admin only)
+export async function removeParticipant(conversationId: string, userId: string) {
+  const { error } = await supabase
+    .from('conversation_participants')
+    .update({ left_at: new Date().toISOString() })
+    .eq('conversation_id', conversationId)
+    .eq('user_id', userId);
+
+  if (error) throw error;
+}
+
+// Get conversation participants
+export async function getConversationParticipants(conversationId: string) {
+  const { data, error } = await supabase
+    .from('conversation_participants')
+    .select(`
+      *,
+      user:users (
+        id,
+        nickname,
+        avatar_url,
+        role
+      )
+    `)
+    .eq('conversation_id', conversationId)
+    .is('left_at', null);
+
+  if (error) throw error;
+  return data;
+}
+
 // Subscribe to new messages in a conversation
 export function subscribeToMessages(
   conversationId: string,
